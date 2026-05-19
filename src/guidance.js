@@ -1,15 +1,15 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
-import { listenForRealTimeUpdates } from "./index.js";
-import { generateStudentSummary } from "./ai.js";
+import { listenForRealTimeUpdates } from "./syncUtil.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 // --- VIEW COMPONENTS ---
 
 export function renderAppointmentsTable() {
-  const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const rawAppointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
   listenForRealTimeUpdates(() => {
-    const tableContainer = document.getElementById("adminTableContainer"); 
+    const tableContainer = document.getElementById("adminTableContainer");
     if (tableContainer) {
       // Re-read local storage, resort, and swap out the HTML content smoothly
       tableContainer.innerHTML = renderAppointmentsTable();
@@ -19,17 +19,17 @@ export function renderAppointmentsTable() {
   // FIXED: Implemented clean multi-tier sorting for guidance dashboards
   const appointments = [...rawAppointments].sort((a, b) => {
     const statusRank = {
-      "pending": 1,
-      "approved": 2,
-      "rejected": 3,
-      "cancelled": 3
+      pending: 1,
+      approved: 2,
+      rejected: 3,
+      cancelled: 3,
     };
 
     const rankA = statusRank[a.status.toLowerCase()] || 4;
     const rankB = statusRank[b.status.toLowerCase()] || 4;
 
     if (rankA !== rankB) {
-      return rankA - rankB; 
+      return rankA - rankB;
     }
 
     // Secondary fallback: Sort by date chronological timeline execution order
@@ -64,7 +64,7 @@ export function renderAppointmentsTable() {
                               const isPending = app.status === "pending";
 
                               return `
-                        <tr style="${isCancelled ? 'opacity: 0.65; background-color: #f8fafc;' : ''}">
+                        <tr style="${isCancelled ? "opacity: 0.65; background-color: #f8fafc;" : ""}">
                             <td data-label="Student">
                                 <div class="user-info">
                                     <span class="user-name">${app.studentName}</span>
@@ -83,22 +83,30 @@ export function renderAppointmentsTable() {
                             </td>
                             <td data-label="Actions">
                                 <div class="action-btns">
-                                    ${isPending ? `
+                                    ${
+                                      isPending
+                                        ? `
                                         <button class="btn-approve" onclick="openActionModal(${app.id}, 'approved')" title="Approve Request">
                                             <i class="material-icons">check</i>
                                         </button>
                                         <button class="btn-reject" onclick="openActionModal(${app.id}, 'rejected')" title="Reject Request">
                                             <i class="material-icons">close</i>
                                         </button>
-                                    ` : `
-                                        ${isCancelled ? `
+                                    `
+                                        : `
+                                        ${
+                                          isCancelled
+                                            ? `
                                             <span style="color: #64748b; font-size: 0.85rem; font-style: italic; display: inline-flex; align-items: center; gap: 4px;">
                                                 <i class="material-icons" style="font-size: 14px;">remove_circle_outline</i> Cancelled by Student
                                             </span>
-                                        ` : `
+                                        `
+                                            : `
                                             <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Processed</span>
-                                        `}
-                                    `}
+                                        `
+                                        }
+                                    `
+                                    }
                                 </div>
                             </td>
                         </tr>`;

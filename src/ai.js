@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
 
 /**
  * GRANBY GATEWAY - CENTRAL AI MODULE
@@ -6,9 +6,11 @@ import { GoogleGenAI } from '@google/genai';
  */
 
 // Initialize the Google Gen AI client with your API key
-// For local testing, paste your API key here. For production deployment, 
+// For local testing, paste your API key here. For production deployment,
 // this should be moved behind an environment variable or a serverless function.
-const ai = new GoogleGenAI({ apiKey: "AIzaSyCoZVDeXUJDyGe6eeId5zR95g7Pr8cfq0s" });
+const ai = new GoogleGenAI({
+  apiKey: "AIzaSyCoZVDeXUJDyGe6eeId5zR95g7Pr8cfq0s",
+});
 
 /**
  * FEATURE 1: Pre-Booking Smart FAQ & Chatbot Assistant (For Students)
@@ -18,7 +20,11 @@ const ai = new GoogleGenAI({ apiKey: "AIzaSyCoZVDeXUJDyGe6eeId5zR95g7Pr8cfq0s" }
  * @param {function} onProgressUpdate - Optional callback to pass loading text back to the UI
  * @returns {Promise<string>} The markdown-formatted AI response
  */
-export async function getPreBookingAdvice(studentNote, selectedCategory, onProgressUpdate) {
+export async function getPreBookingAdvice(
+  studentNote,
+  selectedCategory,
+  onProgressUpdate,
+) {
   if (!studentNote || studentNote.trim().length < 2) return null;
 
   try {
@@ -54,16 +60,15 @@ export async function getPreBookingAdvice(studentNote, selectedCategory, onProgr
 
     // Execute content generation via Google's optimized flash model
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: `Context: ${selectedCategory}. Question: ${studentNote}`,
       config: {
         systemInstruction,
         temperature: 0.6, // Balanced for precise guidelines with a natural tone
-      }
+      },
     });
 
     return response.text;
-
   } catch (error) {
     console.error("❌ Gemini API Chat Error:", error);
     return "⚠️ The AI helper is temporarily offline. Please look at standard guidelines or proceed with scheduling a slot with your counselor.";
@@ -77,7 +82,10 @@ export async function getPreBookingAdvice(studentNote, selectedCategory, onProgr
  * @param {Array} appointmentHistory - Array of past appointment objects fetched from localStorage
  * @returns {Promise<string>} A 3-bullet markdown summary
  */
-export async function generateStudentSummary(studentName, appointmentHistory = []) {
+export async function generateStudentSummary(
+  studentName,
+  appointmentHistory = [],
+) {
   if (appointmentHistory.length === 0) {
     return "💡 <em>This student has no past session records on file. The upcoming appointment will be their initial intake consultation.</em>";
   }
@@ -85,7 +93,10 @@ export async function generateStudentSummary(studentName, appointmentHistory = [
   try {
     // Compile array of logs into a single structured text block for the LLM to analyze
     const historyLogs = appointmentHistory
-      .map(app => `- Date: ${app.date}, Type: ${app.type}, Status: ${app.status}, Student Notes: "${app.notes || 'None'}"`)
+      .map(
+        (app) =>
+          `- Date: ${app.date}, Type: ${app.type}, Status: ${app.status}, Student Notes: "${app.notes || "None"}"`,
+      )
       .join("\n");
 
     const prompt = `
@@ -100,12 +111,11 @@ export async function generateStudentSummary(studentName, appointmentHistory = [
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
     return response.text;
-
   } catch (error) {
     console.error("❌ Gemini API Summary Error:", error);
     return "⚠️ <em>Unable to parse historical ledger trends automatically at this time. Please read raw history entries manually below.</em>";

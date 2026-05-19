@@ -15,7 +15,7 @@ async function hashPassword(password) {
   const data = encoder.encode(password);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // --- UPDATED SEED USERS ---
@@ -142,7 +142,10 @@ const seedAppointments = () => {
       },
     ];
 
-    localStorage.setItem("gh_appointments", JSON.stringify(initialAppointments));
+    localStorage.setItem(
+      "gh_appointments",
+      JSON.stringify(initialAppointments),
+    );
   }
 };
 
@@ -160,7 +163,8 @@ async function handleLogin(identifier, p, showError) {
   const inputHash = await hashPassword(p);
 
   const found = users.find(
-    (u) => (u.user === identifier || u.email === identifier) && u.pass === inputHash,
+    (u) =>
+      (u.user === identifier || u.email === identifier) && u.pass === inputHash,
   );
 
   if (found) {
@@ -211,17 +215,6 @@ async function handleRegister(
   if (showSuccess) {
     showSuccess();
   }
-}
-
-export function listenForRealTimeUpdates(renderCallback) {
-  window.addEventListener("storage", (e) => {
-    // Only trigger a re-render if the changes happened to the appointments database
-    if (e.key === "gh_appointments") {
-     console.log(" Real-time database mutation detected! Syncing UI layouts...");
-      
-      renderCallback();
-    }
-  });
 }
 
 // --- ROUTER ---

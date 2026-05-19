@@ -8,7 +8,7 @@ import {
   getDate,
   isSameDay,
 } from "date-fns";
-import { listenForRealTimeUpdates } from "./index.js";
+import { listenForRealTimeUpdates } from "./syncUtil.js";
 import { getPreBookingAdvice } from "./ai.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
@@ -82,8 +82,9 @@ export function renderRightSidebar(myApps) {
 }
 export function renderDashboard(session = {}) {
   // 1. Data Retrieval & Filtering
-  const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  
+  const appointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
   // Filter appointments belonging to this specific logged-in student
   const rawMyApps = appointments.filter(
     (a) => a.studentId === session.id || a.studentEmail === session.email,
@@ -92,10 +93,10 @@ export function renderDashboard(session = {}) {
   // 2. Custom Multi-Tier Sorting for Students
   const myApps = [...rawMyApps].sort((a, b) => {
     const studentStatusRank = {
-      "approved": 1,   // Top Priority: Show confirmed active calendar schedules first
-      "pending": 2,    // Second Priority: Show requests currently in queue review
-      "rejected": 3,   // Low Priority: Historical logs
-      "cancelled": 3   // Low Priority: Historical logs
+      approved: 1, // Top Priority: Show confirmed active calendar schedules first
+      pending: 2, // Second Priority: Show requests currently in queue review
+      rejected: 3, // Low Priority: Historical logs
+      cancelled: 3, // Low Priority: Historical logs
     };
 
     const rankA = studentStatusRank[a.status.toLowerCase()] || 4;
@@ -159,34 +160,51 @@ export function renderDashboard(session = {}) {
                                     .slice(0, 5)
                                     .map((app) => {
                                       // Date evaluation checks
-                                      const appointmentDate = new Date(app.date);
+                                      const appointmentDate = new Date(
+                                        app.date,
+                                      );
                                       const today = new Date();
                                       today.setHours(0, 0, 0, 0);
                                       appointmentDate.setHours(0, 0, 0, 0);
 
-                                      const isPastDate = appointmentDate < today;
-                                      const isInactiveLog = app.status === "cancelled" || app.status === "rejected";
+                                      const isPastDate =
+                                        appointmentDate < today;
+                                      const isInactiveLog =
+                                        app.status === "cancelled" ||
+                                        app.status === "rejected";
 
                                       // Core cancellation constraints validation rule
-                                      const canCancel = app.status === "pending" || (app.status === "approved" && !isPastDate);
+                                      const canCancel =
+                                        app.status === "pending" ||
+                                        (app.status === "approved" &&
+                                          !isPastDate);
 
                                       return `
-                                    <tr style="${isInactiveLog || (app.status === "approved" && isPastDate) ? 'opacity: 0.55; background-color: #f8fafc;' : ''}">
+                                    <tr style="${isInactiveLog || (app.status === "approved" && isPastDate) ? "opacity: 0.55; background-color: #f8fafc;" : ""}">
                                         <td><strong>${format(new Date(app.date), "MMMM dd, yyyy")}</strong></td>
                                         <td>${app.type}</td>
                                         <td><span class="status-pill ${app.status.toLowerCase()}">${app.status}</span></td>
                                         <td style="text-align: center;">
-                                            ${canCancel ? `
+                                            ${
+                                              canCancel
+                                                ? `
                                                 <button class="cancel-btn-table" data-id="${app.id}" title="Cancel Appointment" style="background: none; border: none; color: #ef4444; cursor: pointer; display: inline-flex; align-items: center; padding: 4px;">
                                                     <i class="material-icons" style="font-size: 18px;">cancel</i>
                                                 </button>
-                                            ` : `
-                                                ${app.status === "approved" && isPastDate ? `
+                                            `
+                                                : `
+                                                ${
+                                                  app.status === "approved" &&
+                                                  isPastDate
+                                                    ? `
                                                     <i class="material-icons" title="Completed Past Session" style="color: #10b981; font-size: 18px; cursor: default; vertical-align: middle;">check_circle</i>
-                                                ` : `
+                                                `
+                                                    : `
                                                     <span style="color: #94a3b8; font-size: 12px;">—</span>
-                                                `}
-                                            `}
+                                                `
+                                                }
+                                            `
+                                            }
                                         </td>
                                     </tr>
                                 `;
@@ -206,7 +224,8 @@ export function renderDashboard(session = {}) {
 }
 export function renderBookingForm(session = {}) {
   // 1. Get appointments data for the sidebar
-  const allAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const allAppointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const myApps = allAppointments.filter((a) => a.studentId === session.id);
 
   // 2. Fetch global users database and filter down to available counselors
@@ -215,15 +234,15 @@ export function renderBookingForm(session = {}) {
 
   // 3. Programmatically compile the HTML option elements for the dropdown menu
   let counselorOptions = `<option value="">Select a preferred counselor...</option>`;
-  
+
   // Add an automated "any available" fallback choice first
   counselorOptions += `<option value="auto">Any Available Counselor (Round-Robin)</option>`;
-  
+
   // Append choices for all real registered guidance objects found in database
   counselors.forEach((c) => {
     counselorOptions += `
       <option value="${c.id}" data-name="${c.name}">
-        ${c.name} — (${c.specialty || 'General Counseling'})
+        ${c.name} — (${c.specialty || "General Counseling"})
       </option>
     `;
   });
@@ -410,11 +429,13 @@ export function renderSettings(container, session) {
       localStorage.setItem("gh_session", JSON.stringify(newSession));
 
       alert("Profile updated successfully!");
-      
+
       // Forces layout refresh engine context to pickup updated session states
       window.location.reload();
     } else {
-      alert("Error: Active student account profile not located in system ledger files.");
+      alert(
+        "Error: Active student account profile not located in system ledger files.",
+      );
     }
   };
 }
@@ -442,7 +463,8 @@ function attachBookingListener(session) {
 
     // NEW: Get Counselor Dropdown elements
     const counselorSelect = document.getElementById("appCounselor");
-    const selectedOption = counselorSelect.options[counselorSelect.selectedIndex];
+    const selectedOption =
+      counselorSelect.options[counselorSelect.selectedIndex];
     const isAutoAssign = counselorSelect.value === "auto";
 
     const newApp = {
@@ -450,11 +472,13 @@ function attachBookingListener(session) {
       studentId: session.id,
       studentName: session.name,
       studentEmail: session.email,
-      
+
       // NEW: Dynamic counselor storage assignments
       counselorId: isAutoAssign ? null : parseInt(counselorSelect.value, 10),
-      counselorName: isAutoAssign ? "Unassigned (Auto)" : selectedOption.getAttribute("data-name"),
-      
+      counselorName: isAutoAssign
+        ? "Unassigned (Auto)"
+        : selectedOption.getAttribute("data-name"),
+
       type: document.getElementById("appType").value,
       date: document.getElementById("appDate").value,
       time: document.getElementById("appTime").value,
@@ -462,7 +486,7 @@ function attachBookingListener(session) {
       status: "pending",
       counselorNotes: "",
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
     submitBtn.innerText = "Sending...";
@@ -472,7 +496,7 @@ function attachBookingListener(session) {
     const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
     allApps.push(newApp);
     localStorage.setItem("gh_appointments", JSON.stringify(allApps));
-    
+
     // 2. Resolve target email routes
     const users = JSON.parse(localStorage.getItem("gh_users")) || [];
     let targetEmails = "";
@@ -492,7 +516,10 @@ function attachBookingListener(session) {
         recipientName = chosenCounselor.name;
       } else {
         // Fallback catch-all just in case
-        targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
+        targetEmails = users
+          .filter((u) => u.role === "guidance")
+          .map((u) => u.email)
+          .join(",");
       }
     }
 
@@ -518,7 +545,9 @@ function attachBookingListener(session) {
       })
       .then((res) => {
         console.log("Email Sent Successfully!", res.status, res.text);
-        alert(`Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`);
+        alert(
+          `Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`,
+        );
         window.location.reload();
       })
       .catch((err) => {
@@ -543,20 +572,22 @@ export function attachCancelListeners() {
 
     showCustomConfirmModal({
       title: "Cancel Appointment",
-      message: "Are you sure you want to cancel this counseling appointment request? This action cannot be undone.",
+      message:
+        "Are you sure you want to cancel this counseling appointment request? This action cannot be undone.",
       onConfirm: () => {
         // 1. Fetch current datasets
-        const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-        
+        const allApps =
+          JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
         let targetApp = null;
 
         // 2. Locate and modify the target state values
-        const updatedApps = allApps.map(app => {
+        const updatedApps = allApps.map((app) => {
           if (app.id === appId) {
             targetApp = {
               ...app,
               status: "cancelled",
-              updatedAt: new Date().toISOString()
+              updatedAt: new Date().toISOString(),
             };
             return targetApp;
           }
@@ -573,7 +604,7 @@ export function attachCancelListeners() {
           // If fallback is required due to synchronous timing issues
           window.location.reload();
         }
-      }
+      },
     });
   });
 }
@@ -622,13 +653,21 @@ function notifyCounselorOfCancellation(appointment) {
       notes: appointment.notes || "No additional comments left by student.",
     })
     .then((res) => {
-      console.log("Cancellation Email Sent Successfully!", res.status, res.text);
-      alert("Appointment successfully cancelled. The counselor has been notified via email.");
+      console.log(
+        "Cancellation Email Sent Successfully!",
+        res.status,
+        res.text,
+      );
+      alert(
+        "Appointment successfully cancelled. The counselor has been notified via email.",
+      );
       window.location.reload(); // Refresh viewport layout after successful email handshake
     })
     .catch((err) => {
       console.error("EmailJS Cancellation Error:", err);
-      alert(`Cancelled locally, but failed to alert counselor via email (Code: ${err.status}).`);
+      alert(
+        `Cancelled locally, but failed to alert counselor via email (Code: ${err.status}).`,
+      );
       window.location.reload(); // Refresh anyway so the dashboard stays accurate locally
     });
 }
@@ -638,7 +677,7 @@ function showCustomConfirmModal({ title, message, onConfirm }) {
   // Create a overlay wrapper element block
   const modalOverlay = document.createElement("div");
   modalOverlay.className = "custom-modal-overlay";
-  
+
   // Inject clean HTML template structural layout
   modalOverlay.innerHTML = `
     <div class="custom-modal-card">
@@ -740,7 +779,7 @@ export function renderStudentView(root, session, onLogout) {
 
   // 1. Initialize click bindings for buttons inside the view
   setupStudentListeners(onLogout, session);
-  
+
   // 2. Attach initial cancellation triggers for elements inside dashboard table
   attachCancelListeners();
 
@@ -751,11 +790,15 @@ export function renderStudentView(root, session, onLogout) {
   listenForRealTimeUpdates(() => {
     const content = document.getElementById("dynamic-content");
     const activeNav = document.querySelector(".nav-item.active");
-    
-    if (content && activeNav && activeNav.getAttribute("data-target") === "dashboard") {
+
+    if (
+      content &&
+      activeNav &&
+      activeNav.getAttribute("data-target") === "dashboard"
+    ) {
       console.log("Synchronizing student dashboard metrics...");
       content.innerHTML = renderDashboard(session);
-      attachCancelListeners(); 
+      attachCancelListeners();
     }
   });
 }
@@ -787,7 +830,7 @@ function initializeFloatingChatboxEngine() {
 
   // Submit messages query loop interceptor routing pipeline
   // Submit messages query loop interceptor routing pipeline
-// Submit messages query loop interceptor routing pipeline
+  // Submit messages query loop interceptor routing pipeline
   form.onsubmit = async (e) => {
     e.preventDefault();
     const userText = input.value.trim();
@@ -816,15 +859,20 @@ function initializeFloatingChatboxEngine() {
     try {
       // Direct local browser LLM inference invocation pipeline
       // Third parameter passes progress tracking metrics string straight to text viewports
-      const aiReply = await getPreBookingAdvice(userText, "General Campus Inquiry", (progressText) => {
-        const statusNode = document.getElementById("ai-status-text");
-        if (statusNode) {
-          // Truncate overly long system logs to keep chat bubbles compact
-          statusNode.innerText = progressText.length > 40 
-            ? `🤖 ${progressText.substring(0, 37)}...` 
-            : `🤖 ${progressText}`;
-        }
-      });
+      const aiReply = await getPreBookingAdvice(
+        userText,
+        "General Campus Inquiry",
+        (progressText) => {
+          const statusNode = document.getElementById("ai-status-text");
+          if (statusNode) {
+            // Truncate overly long system logs to keep chat bubbles compact
+            statusNode.innerText =
+              progressText.length > 40
+                ? `🤖 ${progressText.substring(0, 37)}...`
+                : `🤖 ${progressText}`;
+          }
+        },
+      );
 
       // Extract and strip away loader indicator row
       document.getElementById(loadingBubbleId)?.remove();
