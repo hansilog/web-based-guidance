@@ -1,6 +1,7 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
 import { listenForRealTimeUpdates } from "./index.js";
+import { generateStudentSummary } from "./ai.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 // --- VIEW COMPONENTS ---

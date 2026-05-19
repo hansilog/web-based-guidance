@@ -9,6 +9,7 @@ import {
   isSameDay,
 } from "date-fns";
 import { listenForRealTimeUpdates } from "./index.js";
+import { getPreBookingAdvice } from "./ai.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -382,8 +383,8 @@ function renderSettings(container, session) {
 
   // Re-attach the submit listener
   const form = document.getElementById("settingsForm");
-  form.onsubmit = (e) => {
-    e.preventDefault();
+  submit = (e) => {
+    form.one.preventDefault();
 
     const updatedData = {
       name: document.getElementById("setName").value.trim(),
@@ -687,39 +688,158 @@ export function renderStudentView(root, session, onLogout) {
                 <button class="nav-item" data-target="settings">
                     <i class="material-icons">settings</i> Settings
                 </button>
+                
+                <button class="nav-item ai-chat-trigger" id="openAiChatBtn" style="color: #3b82f6; font-weight: 600; margin-top: auto;">
+                    <i class="material-icons">psychology</i> Ask Granby AI
+                </button>
+
                 <button class="nav-item logout" id="logoutBtn">
                     <i class="material-icons">logout</i> Logout
                 </button>
             </nav>
         </aside>
+        
         <main class="content-area">
             <section id="dynamic-content">${renderDashboard(session)}</section>
         </main>
+
+        <div id="floating-ai-chatbox" class="chatbox-window hidden" style="position: fixed; bottom: 20px; right: 20px; width: 360px; height: 460px; background: #ffffff; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 9999; overflow: hidden; transition: all 0.25s ease-in-out;">
+            <div style="background: #3b82f6; color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="material-icons">psychology</i>
+                    <span style="font-weight: 600; font-size: 0.9rem;">Granby Campus Assistant</span>
+                </div>
+                <button id="closeAiChatBtn" style="background: none; border: none; color: white; cursor: pointer; display: inline-flex; align-items: center; padding: 2px;">
+                    <i class="material-icons" style="font-size: 20px;">remove</i>
+                </button>
+            </div>
+            
+            <div id="chatbox-messages-viewport" style="flex: 1; padding: 16px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem;">
+                <div style="background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5;">
+                    👋 Hello! I am your virtual campus helper. Ask me anything about shifting schedules, dropping documents, or getting ready for counseling!
+                </div>
+            </div>
+
+            <form id="chatbox-input-form" style="display: flex; border-top: 1px solid #e2e8f0; background: #ffffff; padding: 8px; gap: 6px; margin: 0;">
+                <input type="text" id="chatbox-user-msg" placeholder="Type your campus question here..." autocomplete="off" required style="flex: 1; border: none; padding: 8px 10px; font-size: 0.85rem; outline: none;">
+                <button type="submit" style="background: #3b82f6; color: white; border: none; border-radius: 6px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
+                    <i class="material-icons" style="font-size: 18px;">send</i>
+                </button>
+            </form>
+        </div>
     </div>
   `;
 
   // 1. Initialize click bindings for buttons inside the view
   setupStudentListeners(onLogout, session);
   
-  // 2. FIXED: Attach initial cancel listener to the freshly rendered layout
+  // 2. Attach initial cancellation triggers for elements inside dashboard table
   attachCancelListeners();
 
-  // 3. FIXED: Moved sync listener INSIDE the initialization scope where 'root' and 'session' live
+  // 3. NEW: Wire up the active listeners for the floating chatbot window engine
+  initializeFloatingChatboxEngine();
+
+  // 4. Moved real-time sync listener INSIDE the initialization scope
   listenForRealTimeUpdates(() => {
     const content = document.getElementById("dynamic-content");
     const activeNav = document.querySelector(".nav-item.active");
     
-    // Safety check: Only auto-refresh if the student is currently viewing the "dashboard" screen
     if (content && activeNav && activeNav.getAttribute("data-target") === "dashboard") {
       console.log("Synchronizing student dashboard metrics...");
       content.innerHTML = renderDashboard(session);
-      
-      // CRITICAL: Re-bind event listeners to the fresh dashboard table DOM elements!
       attachCancelListeners(); 
     }
   });
 }
 
+// --- Chatbox Operational Functionality Code Core Engine ---
+function initializeFloatingChatboxEngine() {
+  const chatbox = document.getElementById("floating-ai-chatbox");
+  const openBtn = document.getElementById("openAiChatBtn");
+  const closeBtn = document.getElementById("closeAiChatBtn");
+  const form = document.getElementById("chatbox-input-form");
+  const input = document.getElementById("chatbox-user-msg");
+  const viewport = document.getElementById("chatbox-messages-viewport");
+
+  if (!chatbox || !openBtn || !closeBtn || !form || !input || !viewport) return;
+
+  // Toggle visible show/hide css state rule flags
+  openBtn.onclick = (e) => {
+    e.preventDefault();
+    chatbox.classList.toggle("hidden");
+    if (!chatbox.classList.contains("hidden")) {
+      input.focus();
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  };
+
+  closeBtn.onclick = () => {
+    chatbox.classList.add("hidden");
+  };
+
+  // Submit messages query loop interceptor routing pipeline
+  // Submit messages query loop interceptor routing pipeline
+// Submit messages query loop interceptor routing pipeline
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const userText = input.value.trim();
+    if (!userText) return; // Prevent empty spaces
+
+    // Wipe text field instantly for UX crispness
+    input.value = "";
+
+    // Render User text snippet to chat window
+    viewport.innerHTML += `
+      <div style="background: #3b82f6; color: white; padding: 10px 12px; border-radius: 8px 8px 0px 8px; max-width: 85%; align-self: flex-end; line-height: 1.5; word-break: break-word;">
+          ${userText}
+      </div>
+    `;
+    viewport.scrollTop = viewport.scrollHeight;
+
+    // Render loading text bubble block with dynamic tracking target spans
+    const loadingBubbleId = `ai-loading-${Date.now()}`;
+    viewport.innerHTML += `
+      <div id="${loadingBubbleId}" style="background: #e2e8f0; color: #64748b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; font-style: italic;">
+          <span id="ai-status-text">🤖 Waking up neural processor...</span>
+      </div>
+    `;
+    viewport.scrollTop = viewport.scrollHeight;
+
+    try {
+      // Direct local browser LLM inference invocation pipeline
+      // Third parameter passes progress tracking metrics string straight to text viewports
+      const aiReply = await getPreBookingAdvice(userText, "General Campus Inquiry", (progressText) => {
+        const statusNode = document.getElementById("ai-status-text");
+        if (statusNode) {
+          // Truncate overly long system logs to keep chat bubbles compact
+          statusNode.innerText = progressText.length > 40 
+            ? `🤖 ${progressText.substring(0, 37)}...` 
+            : `🤖 ${progressText}`;
+        }
+      });
+
+      // Extract and strip away loader indicator row
+      document.getElementById(loadingBubbleId)?.remove();
+
+      // Render actual processed dynamic LLM reasoning response
+      viewport.innerHTML += `
+        <div style="background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5;">
+            ${aiReply || "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?"}
+        </div>
+      `;
+    } catch (err) {
+      document.getElementById(loadingBubbleId)?.remove();
+      console.error("Local inference execution failed:", err);
+      viewport.innerHTML += `
+        <div style="background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start;">
+            ⚠️ Local AI processing encountered a bump. Ensure your hardware supports WebGPU or try a lighter query string.
+        </div>
+      `;
+    }
+
+    viewport.scrollTop = viewport.scrollHeight;
+  };
+}
 function setupStudentListeners(onLogout, session) {
   const content = document.getElementById("dynamic-content");
   const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
