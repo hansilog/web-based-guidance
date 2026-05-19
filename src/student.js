@@ -349,7 +349,7 @@ export function renderHistory(session = {}) {
         </div>
     `;
 }
-function renderSettings(container, session) {
+export function renderSettings(container, session) {
   container.innerHTML = `
     <div class="settings-card">
         <div class="card-header">
@@ -364,12 +364,12 @@ function renderSettings(container, session) {
                 <label>Email Address</label>
                 <input type="email" id="setEmail" value="${session.email || ""}" required>
             </div>
-            <div class="input-group-row">
-                 <div class="input-wrapper plain">
+            <div class="input-group-row" style="display: flex; gap: 16px; margin-bottom: 20px;">
+                 <div class="input-wrapper plain" style="flex: 1;">
                     <label>Course</label>
                     <input type="text" id="setCourse" value="${session.course || ""}" placeholder="e.g. BSIT" required>
                 </div>
-                <div class="input-wrapper plain">
+                <div class="input-wrapper plain" style="flex: 1;">
                     <label>Section</label>
                     <input type="text" id="setSection" value="${session.section || ""}" placeholder="e.g. 1A" required>
                 </div>
@@ -383,8 +383,12 @@ function renderSettings(container, session) {
 
   // Re-attach the submit listener
   const form = document.getElementById("settingsForm");
-  submit = (e) => {
-    form.one.preventDefault();
+  if (!form) return;
+
+  // FIXED: Correct event listener binding syntax assignment
+  form.onsubmit = (e) => {
+    // FIXED: Corrected 'form.one' typo back to the standard event argument execution
+    e.preventDefault();
 
     const updatedData = {
       name: document.getElementById("setName").value.trim(),
@@ -397,16 +401,20 @@ function renderSettings(container, session) {
     const userIndex = users.findIndex((u) => u.id === session.id);
 
     if (userIndex !== -1) {
-      // Update DB
+      // Update DB database arrays
       users[userIndex] = { ...users[userIndex], ...updatedData };
       localStorage.setItem("gh_users", JSON.stringify(users));
 
-      // Update Session
+      // Update Active Session state parameters
       const newSession = { ...session, ...updatedData };
       localStorage.setItem("gh_session", JSON.stringify(newSession));
 
       alert("Profile updated successfully!");
+      
+      // Forces layout refresh engine context to pickup updated session states
       window.location.reload();
+    } else {
+      alert("Error: Active student account profile not located in system ledger files.");
     }
   };
 }
