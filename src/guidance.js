@@ -1,11 +1,20 @@
 import "./styles/guidance.css";
 import emailjs from "@emailjs/browser";
+
 emailjs.init("6_rFpZEVOh3AVEsIM");
 // --- VIEW COMPONENTS ---
 
 export function renderAppointmentsTable() {
-  const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const appointments = [...rawAppointments].sort((a, b) => b.id - a.id);
+  const rawAppointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const appointments = [...rawAppointments].sort((a, b) => {
+    // 1. Prioritize 'pending' status
+    if (a.status === "pending" && b.status !== "pending") return -1;
+    if (a.status !== "pending" && b.status === "pending") return 1;
+
+    // 2. If both have the same status, sort by ID descending (newest first)
+    return b.id - a.id;
+  });
 
   return `
     <div class="table-card">
@@ -29,7 +38,9 @@ export function renderAppointmentsTable() {
                 <tbody>
                     ${
                       appointments.length > 0
-                        ? appointments.map(app => `
+                        ? appointments
+                            .map(
+                              (app) => `
                         <tr>
                             <td data-label="Student">
                                 <div class="user-info">
@@ -51,7 +62,9 @@ export function renderAppointmentsTable() {
                                     <button class="btn-reject" onclick="openActionModal(${app.id}, 'rejected')"><i class="material-icons">close</i></button>
                                 </div>
                             </td>
-                        </tr>`).join("")
+                        </tr>`,
+                            )
+                            .join("")
                         : '<tr><td colspan="5" class="empty-row">No appointment requests found.</td></tr>'
                     }
                 </tbody>
@@ -62,25 +75,29 @@ export function renderAppointmentsTable() {
 }
 
 function renderConfirmationModal(id, status) {
-    const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    const app = apps.find(a => a.id === id);
-    const isApprove = status === 'approved';
+  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const app = apps.find((a) => a.id === id);
+  const isApprove = status === "approved";
 
-    return `
+  return `
         <div id="statusModal" class="modal-overlay">
             <div class="modal-content">
-                <h3>${isApprove ? 'Confirm Approval' : 'Reason for Rejection'}</h3>
+                <h3>${isApprove ? "Confirm Approval" : "Reason for Rejection"}</h3>
                 <p>Student: <strong>${app.studentName}</strong></p>
                 
                 <div class="modal-body">
-                    ${isApprove ? `
+                    ${
+                      isApprove
+                        ? `
                         <label>Update Schedule (Optional):</label>
                         <input type="time" id="modalTime" value="${app.time}">
                         <label>Notes/Instructions for Student:</label>
-                    ` : `
+                    `
+                        : `
                         <label>Reason for Rejection (Required):</label>
-                    `}
-                    <textarea id="modalNotes" placeholder="${isApprove ? 'e.g. Please bring your student ID...' : 'e.g. Schedule conflict, please choose another date.'}"></textarea>
+                    `
+                    }
+                    <textarea id="modalNotes" placeholder="${isApprove ? "e.g. Please bring your student ID..." : "e.g. Schedule conflict, please choose another date."}"></textarea>
                 </div>
 
                 <div class="modal-actions">
@@ -94,54 +111,56 @@ function renderConfirmationModal(id, status) {
     `;
 }
 window.openActionModal = (id, status) => {
-    const modalContainer = document.createElement('div');
-    modalContainer.id = "modal-root";
-    modalContainer.innerHTML = renderConfirmationModal(id, status);
-    document.body.appendChild(modalContainer);
+  const modalContainer = document.createElement("div");
+  modalContainer.id = "modal-root";
+  modalContainer.innerHTML = renderConfirmationModal(id, status);
+  document.body.appendChild(modalContainer);
 };
 
 window.closeModal = () => {
-    const modal = document.getElementById("modal-root");
-    if (modal) modal.remove();
+  const modal = document.getElementById("modal-root");
+  if (modal) modal.remove();
 };
 
 window.processStatusUpdate = async (id, newStatus) => {
-    const notes = document.getElementById("modalNotes").value;
-    const newTime = document.getElementById("modalTime") ? document.getElementById("modalTime").value : null;
+  const notes = document.getElementById("modalNotes").value;
+  const newTime = document.getElementById("modalTime")
+    ? document.getElementById("modalTime").value
+    : null;
 
-    if (newStatus === 'rejected' && !notes.trim()) {
-        alert("Please provide a reason for rejection.");
-        return;
+  if (newStatus === "rejected" && !notes.trim()) {
+    alert("Please provide a reason for rejection.");
+    return;
+  }
+
+  let appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
+  // Find the specific appointment to get student details (Email, Name, etc.)
+  const targetApp = appointments.find((a) => a.id === id);
+
+  if (!targetApp) {
+    alert("Appointment not found.");
+    return;
+  }
+  updateSidebarBadges();
+  // Update local data
+  appointments = appointments.map((app) => {
+    if (app.id === id) {
+      return {
+        ...app,
+        status: newStatus,
+        counselorNotes: notes,
+        time: newTime || app.time,
+        updatedAt: new Date().toISOString(),
+      };
     }
+    return app;
+  });
 
-    let appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    
-    // Find the specific appointment to get student details (Email, Name, etc.)
-    const targetApp = appointments.find(a => a.id === id);
+  localStorage.setItem("gh_appointments", JSON.stringify(appointments));
 
-    if (!targetApp) {
-        alert("Appointment not found.");
-        return;
-    }
-
-    // Update local data
-    appointments = appointments.map((app) => {
-        if (app.id === id) {
-            return { 
-                ...app, 
-                status: newStatus,
-                counselorNotes: notes,
-                time: newTime || app.time, 
-                updatedAt: new Date().toISOString()
-            };
-        }
-        return app;
-    });
-
-    localStorage.setItem("gh_appointments", JSON.stringify(appointments));
-    
-    // EmailJS Integration
-    const templateParams = {
+  // EmailJS Integration
+  const templateParams = {
     subject_line: `Update: Your Appointment is ${newStatus.toUpperCase()}`,
     to_email: targetApp.studentEmail,
     recipient_name: targetApp.studentName,
@@ -151,25 +170,27 @@ window.processStatusUpdate = async (id, newStatus) => {
     app_date: targetApp.date,
     app_time: newTime || targetApp.time,
     status: newStatus,
-    notes: notes || "No additional notes provided."
-};
+    notes: notes || "No additional notes provided.",
+  };
 
-    try {
-        // Replace 'YOUR_SERVICE_ID' and 'YOUR_TEMPLATE_ID' with your actual EmailJS IDs
-        await emailjs.send('service_mtv9cbi', 'template_mublumh', templateParams);
-    } catch (error) {
-        console.error("Failed to send email:", error);
-    }
-    
-    closeModal();
+  try {
+    // Replace 'YOUR_SERVICE_ID' and 'YOUR_TEMPLATE_ID' with your actual EmailJS IDs
+    await emailjs.send("service_mtv9cbi", "template_mublumh", templateParams);
+  } catch (error) {
+    console.error("Failed to send email:", error);
+  }
 
-    // Refresh the table UI
-    const content = document.getElementById("admin-dynamic-content");
-    if (content) content.innerHTML = renderAppointmentsTable();
+  closeModal();
 
-    if (window.addNotification) {
-        window.addNotification(`Appointment for ${targetApp.studentName} has been ${newStatus}.`);
-    }
+  // Refresh the table UI
+  const content = document.getElementById("admin-dynamic-content");
+  if (content) content.innerHTML = renderAppointmentsTable();
+
+  if (window.addNotification) {
+    window.addNotification(
+      `Appointment for ${targetApp.studentName} has been ${newStatus}.`,
+    );
+  }
 };
 
 function renderStudentRecords() {
@@ -271,37 +292,53 @@ function renderReports() {
             <div class="report-section">
                 <h3><i class="material-icons">category</i> Request Type Distribution</h3>
                 <div class="chart-container">
-                    ${renderChartRow("Academic", stats.academic, (stats.academic/total)*100, "bg-blue")}
-                    ${renderChartRow("Personal", stats.personal, (stats.personal/total)*100, "bg-red")}
-                    ${renderChartRow("Career", stats.career, (stats.career/total)*100, "bg-green")}
+                    ${renderChartRow("Academic", stats.academic, (stats.academic / total) * 100, "bg-blue")}
+                    ${renderChartRow("Personal", stats.personal, (stats.personal / total) * 100, "bg-red")}
+                    ${renderChartRow("Career", stats.career, (stats.career / total) * 100, "bg-green")}
                 </div>
             </div>
 
             <div class="report-section">
                 <h3><i class="material-icons">assignment_turned_in</i> Case Resolution Status</h3>
                 <div class="chart-container">
-                    ${renderChartRow("Approved", stats.statusBreakdown.approved, (stats.statusBreakdown.approved/total)*100, "bg-green")}
-                    ${renderChartRow("Pending", stats.statusBreakdown.pending, (stats.statusBreakdown.pending/total)*100, "bg-orange")}
-                    ${renderChartRow("Rejected", stats.statusBreakdown.rejected, (stats.statusBreakdown.rejected/total)*100, "bg-red")}
+                    ${renderChartRow("Approved", stats.statusBreakdown.approved, (stats.statusBreakdown.approved / total) * 100, "bg-green")}
+                    ${renderChartRow("Pending", stats.statusBreakdown.pending, (stats.statusBreakdown.pending / total) * 100, "bg-orange")}
+                    ${renderChartRow("Rejected", stats.statusBreakdown.rejected, (stats.statusBreakdown.rejected / total) * 100, "bg-red")}
                 </div>
             </div>
 
             <div class="report-section">
                 <h3><i class="material-icons">leaderboard</i> Volume by Year Level</h3>
                 <div class="chart-container">
-                    ${Object.entries(stats.yearBreakdown).map(([year, count]) => 
-                        renderChartRow(year, count, (count/total)*100, "bg-purple")
-                    ).join('')}
+                    ${Object.entries(stats.yearBreakdown)
+                      .map(([year, count]) =>
+                        renderChartRow(
+                          year,
+                          count,
+                          (count / total) * 100,
+                          "bg-purple",
+                        ),
+                      )
+                      .join("")}
                 </div>
             </div>
 
             <div class="report-section">
                 <h3><i class="material-icons">school</i> Volume by Course</h3>
                 <div class="chart-container">
-                    ${Object.keys(stats.courseBreakdown).length > 0 ? 
-                        Object.entries(stats.courseBreakdown).map(([course, count]) => 
-                            renderChartRow(course, count, (count/total)*100, "bg-cyan")
-                        ).join('') : '<p class="empty-msg">No course data available yet.</p>'
+                    ${
+                      Object.keys(stats.courseBreakdown).length > 0
+                        ? Object.entries(stats.courseBreakdown)
+                            .map(([course, count]) =>
+                              renderChartRow(
+                                course,
+                                count,
+                                (count / total) * 100,
+                                "bg-cyan",
+                              ),
+                            )
+                            .join("")
+                        : '<p class="empty-msg">No course data available yet.</p>'
                     }
                 </div>
             </div>
@@ -317,8 +354,8 @@ function renderReports() {
 
 // Fixed Helper: Corrects the "Full Bar" visual bug
 function renderChartRow(label, count, width, colorClass) {
-    const barWidth = count > 0 ? width : 0;
-    return `
+  const barWidth = count > 0 ? width : 0;
+  return `
         <div class="chart-row" style="display: flex; align-items: center; margin-bottom: 12px;">
             <span style="width: 130px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${label}</span>
             <div style="flex-grow: 1; height: 10px; background: #f1f5f9; border-radius: 5px; margin: 0 12px; overflow: hidden;">
@@ -330,7 +367,9 @@ function renderChartRow(label, count, width, colorClass) {
 }
 
 export function renderGuidanceSettings() {
-  const savedEmail = localStorage.getItem("admin_notification_email") || "jellopancake213@gmail.com";
+  const savedEmail =
+    localStorage.getItem("admin_notification_email") ||
+    "jellopancake213@gmail.com";
 
   return `
     <div class="glass-card settings-card">
@@ -380,11 +419,12 @@ export function renderGuidanceSettings() {
 }
 function renderLogs() {
   // 1. Retrieve all appointment data [cite: 1, 18, 95]
-  const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  
-  // 2. Filter for activities that have been processed (have an updatedAt timestamp) 
+  const appointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
+  // 2. Filter for activities that have been processed (have an updatedAt timestamp)
   const activities = appointments
-    .filter(app => app.updatedAt) 
+    .filter((app) => app.updatedAt)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   return `
@@ -394,81 +434,93 @@ function renderLogs() {
             <p class="subtitle">Tracking all recent status changes and counselor actions.</p>
         </div>
         <div class="log-container">
-            ${activities.length > 0 ? activities.map(log => `
+            ${
+              activities.length > 0
+                ? activities
+                    .map(
+                      (log) => `
                 <div class="log-entry">
                     <div class="log-icon ${log.status}">
-                        <i class="material-icons">${log.status === 'approved' ? 'check_circle' : 'cancel'}</i>
+                        <i class="material-icons">${log.status === "approved" ? "check_circle" : "cancel"}</i>
                     </div>
                     <div class="log-details">
                         <p><strong>${log.status.toUpperCase()}</strong>: Appointment for <span>${log.studentName}</span></p>
                         <small>Action taken on: ${new Date(log.updatedAt).toLocaleString()}</small>
-                        ${log.counselorNotes ? `<div class="log-notes">Note: "${log.counselorNotes}"</div>` : ''}
+                        ${log.counselorNotes ? `<div class="log-notes">Note: "${log.counselorNotes}"</div>` : ""}
                     </div>
                 </div>
-            `).join('') : '<p class="empty-msg">No recent activity found.</p>'}
+            `,
+                    )
+                    .join("")
+                : '<p class="empty-msg">No recent activity found.</p>'
+            }
         </div>
     </div>
   `;
 }
 function setupTableSearch() {
-    const searchInput = document.getElementById("tableSearch");
-    const table = document.getElementById("adminTable");
+  const searchInput = document.getElementById("tableSearch");
+  const table = document.getElementById("adminTable");
 
-    // Safety check: Exit if elements aren't on the screen yet
-    if (!searchInput || !table) {
-        console.warn("Search initialization skipped: Elements not found in current view.");
-        return;
-    }
+  // Safety check: Exit if elements aren't on the screen yet
+  if (!searchInput || !table) {
+    console.warn(
+      "Search initialization skipped: Elements not found in current view.",
+    );
+    return;
+  }
 
-    // Using .oninput for immediate results as the user types
-    searchInput.oninput = () => {
-        const filter = searchInput.value.toLowerCase().trim();
-        const tbody = table.querySelector("tbody");
-        
-        if (!tbody) return;
+  // Using .oninput for immediate results as the user types
+  searchInput.oninput = () => {
+    const filter = searchInput.value.toLowerCase().trim();
+    const tbody = table.querySelector("tbody");
 
-        const rows = tbody.querySelectorAll("tr");
+    if (!tbody) return;
 
-        rows.forEach((row) => {
-            // 1. Ignore the "No requests found" row if it's visible
-            if (row.classList.contains("empty-row")) return;
+    const rows = tbody.querySelectorAll("tr");
 
-            // 2. Capture all text in the row (Student Name, Email, Category, etc.)
-            const rowText = row.textContent.toLowerCase();
+    rows.forEach((row) => {
+      // 1. Ignore the "No requests found" row if it's visible
+      if (row.classList.contains("empty-row")) return;
 
-            // 3. Toggle visibility based on the filter
-            if (rowText.includes(filter)) {
-                row.style.display = ""; // Show row
-                row.style.animation = "fadeIn 0.3s ease"; // Optional: adds a smooth transition
-            } else {
-                row.style.display = "none"; // Hide row
-            }
-        });
+      // 2. Capture all text in the row (Student Name, Email, Category, etc.)
+      const rowText = row.textContent.toLowerCase();
 
-        // 4. Handle "No Results" state visually (Optional)
-        const visibleRows = Array.from(rows).filter(r => r.style.display !== "none");
-        handleNoSearchResults(tbody, visibleRows.length, filter);
-    };
+      // 3. Toggle visibility based on the filter
+      if (rowText.includes(filter)) {
+        row.style.display = ""; // Show row
+        row.style.animation = "fadeIn 0.3s ease"; // Optional: adds a smooth transition
+      } else {
+        row.style.display = "none"; // Hide row
+      }
+    });
+
+    // 4. Handle "No Results" state visually (Optional)
+    const visibleRows = Array.from(rows).filter(
+      (r) => r.style.display !== "none",
+    );
+    handleNoSearchResults(tbody, visibleRows.length, filter);
+  };
 }
 
 function handleNoSearchResults(tbody, visibleCount, filter) {
-    let noResultRow = tbody.querySelector(".no-search-results");
+  let noResultRow = tbody.querySelector(".no-search-results");
 
-    if (visibleCount === 0 && filter !== "") {
-        if (!noResultRow) {
-            noResultRow = document.createElement("tr");
-            noResultRow.className = "no-search-results";
-            noResultRow.innerHTML = `
+  if (visibleCount === 0 && filter !== "") {
+    if (!noResultRow) {
+      noResultRow = document.createElement("tr");
+      noResultRow.className = "no-search-results";
+      noResultRow.innerHTML = `
                 <td colspan="100%" style="text-align: center; padding: 20px; color: #64748b;">
                     <i class="material-icons" style="vertical-align: middle;">search_off</i>
                     No matches found for "${filter}"
                 </td>
             `;
-            tbody.appendChild(noResultRow);
-        }
-    } else if (noResultRow) {
-        noResultRow.remove();
+      tbody.appendChild(noResultRow);
     }
+  } else if (noResultRow) {
+    noResultRow.remove();
+  }
 }
 export function setupStudentSearch() {
   const searchInput = document.getElementById("studentSearch");
@@ -486,7 +538,7 @@ export function setupStudentSearch() {
 
       // row.textContent captures Name, Course, Email, and ID all at once
       const text = row.textContent.toLowerCase();
-      
+
       if (text.includes(filter)) {
         row.style.display = "";
       } else {
@@ -592,278 +644,293 @@ export function renderGuidanceView(root, session, onLogout) {
   updateSidebarBadges();
 }
 function updateSidebarBadges() {
-    const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    const pendingCount = apps.filter(a => a.status === 'pending').length;
-    const badge = document.getElementById('pendingBadge');
-    if (badge) {
-        badge.innerText = pendingCount;
-        badge.style.display = pendingCount > 0 ? 'block' : 'none';
-    }
+  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const pendingCount = apps.filter((a) => a.status === "pending").length;
+  const badge = document.getElementById("pendingBadge");
+  if (badge) {
+    badge.innerText = pendingCount;
+    badge.style.display = pendingCount > 0 ? "block" : "none";
+  }
 }
 // --- EVENT LISTENERS ---
 
 function setupAdminListeners(onLogout) {
-    const content = document.getElementById("admin-dynamic-content");
-    const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
-    const globalSearch = document.getElementById("globalNavSearch");
+  const content = document.getElementById("admin-dynamic-content");
+  const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
+  const globalSearch = document.getElementById("globalNavSearch");
 
-    // 1. Tab Navigation Logic
-    navButtons.forEach((btn) => {
-        btn.onclick = () => {
-            navButtons.forEach((b) => b.classList.remove("active"));
-            btn.classList.add("active");
+  // 1. Tab Navigation Logic
+  navButtons.forEach((btn) => {
+    btn.onclick = () => {
+      navButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
 
-            const target = btn.getAttribute("data-target");
+      const target = btn.getAttribute("data-target");
 
-            if (target === "appointments") {
-                content.innerHTML = renderAppointmentsTable();
-                setupTableSearch();
-            } else if (target === "students") {
-                content.innerHTML = renderStudentRecords();
-                setupStudentSearch();
-            } else if (target === "reports") {
-                content.innerHTML = renderReports();
-            } else if (target === "settings") {
-                content.innerHTML = renderGuidanceSettings();
-                attachSettingsListener(); 
-            } else if (target === "logs") {
-                content.innerHTML = renderLogs();
-            }
+      if (target === "appointments") {
+        content.innerHTML = renderAppointmentsTable();
+        setupTableSearch();
+      } else if (target === "students") {
+        content.innerHTML = renderStudentRecords();
+        setupStudentSearch();
+      } else if (target === "reports") {
+        content.innerHTML = renderReports();
+      } else if (target === "settings") {
+        content.innerHTML = renderGuidanceSettings();
+        attachSettingsListener();
+      } else if (target === "logs") {
+        content.innerHTML = renderLogs();
+      }
 
-            if (globalSearch) globalSearch.value = "";
+      if (globalSearch) globalSearch.value = "";
 
-            const sidebar = document.getElementById("admin-sidebar");
-            if (window.innerWidth <= 768 && sidebar?.classList.contains("active")) {
-                toggleMenu();
-            }
-        };
-    });
+      const sidebar = document.getElementById("admin-sidebar");
+      if (window.innerWidth <= 768 && sidebar?.classList.contains("active")) {
+        toggleMenu();
+      }
+    };
+  });
 
-    // 2. Global Search Logic
-    if (globalSearch) {
-        globalSearch.oninput = (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll("#admin-dynamic-content tbody tr");
-            rows.forEach((row) => {
-                if (row.classList.contains("empty-row")) return;
-                const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? "" : "none";
-            });
-        };
+  // 2. Global Search Logic
+  if (globalSearch) {
+    globalSearch.oninput = (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll("#admin-dynamic-content tbody tr");
+      rows.forEach((row) => {
+        if (row.classList.contains("empty-row")) return;
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? "" : "none";
+      });
+    };
+  }
+
+  // 3. Settings Form & OTP Logic
+  function attachSettingsListener() {
+    const form = document.getElementById("settingsForm");
+    if (form) {
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const email = document.getElementById("adminEmail").value;
+        localStorage.setItem("admin_notification_email", email);
+        const btn = form.querySelector("button");
+        btn.innerText = "Settings Saved!";
+        btn.style.background = "#10b981";
+        setTimeout(() => {
+          btn.innerText = "Save Configurations";
+          btn.style.background = "";
+        }, 2000);
+      };
     }
 
-    // 3. Settings Form & OTP Logic
-    function attachSettingsListener() {
-        const form = document.getElementById("settingsForm");
-        if (form) {
-            form.onsubmit = (e) => {
-                e.preventDefault();
-                const email = document.getElementById("adminEmail").value;
-                localStorage.setItem("admin_notification_email", email);
-                const btn = form.querySelector("button");
-                btn.innerText = "Settings Saved!";
-                btn.style.background = "#10b981";
-                setTimeout(() => {
-                    btn.innerText = "Save Configurations";
-                    btn.style.background = "";
-                }, 2000);
-            };
-        }
+    let generatedOTP = null;
+    const requestBtn = document.getElementById("requestOtpBtn");
+    const verifyBtn = document.getElementById("verifyOtpBtn");
+    const otpContainer = document.getElementById("otpContainer");
+    const newPassInput = document.getElementById("newPassword");
+    const otpInput = document.getElementById("otpInput");
 
-        let generatedOTP = null;
-        const requestBtn = document.getElementById("requestOtpBtn");
-        const verifyBtn = document.getElementById("verifyOtpBtn");
-        const otpContainer = document.getElementById("otpContainer");
-        const newPassInput = document.getElementById("newPassword");
-        const otpInput = document.getElementById("otpInput");
+    if (requestBtn) {
+      requestBtn.onclick = async () => {
+        const newPass = newPassInput.value;
+        if (newPass.length < 8)
+          return alert("Password must be at least 8 characters long.");
 
-        if (requestBtn) {
-            requestBtn.onclick = async () => {
-                const newPass = newPassInput.value;
-                if (newPass.length < 8) return alert("Password must be at least 8 characters long.");
+        const session = JSON.parse(localStorage.getItem("gh_user_session"));
+        const savedNotification = localStorage.getItem(
+          "admin_notification_email",
+        );
+        const recipientEmail =
+          savedNotification ||
+          (session ? session.email : "jellopancake213@gmail.com");
 
-                const session = JSON.parse(localStorage.getItem("gh_user_session"));
-                const savedNotification = localStorage.getItem("admin_notification_email");
-                const recipientEmail = savedNotification || (session ? session.email : "jellopancake213@gmail.com");
+        generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
 
-                generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-                
-                const now = new Date();
-                const expiryTime = new Date(now.getTime() + 15 * 60000).toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-
-                const templateParams = {
-                    to_email: recipientEmail,
-                    otp_code: generatedOTP,   
-                    time: expiryTime
-                };
-
-                requestBtn.innerText = "Sending OTP...";
-                requestBtn.disabled = true;
-
-                try {
-                    await emailjs.send('service_mtv9cbi', 'template_gbmoria', templateParams);
-                    alert(`OTP Sent to ${recipientEmail}`);
-                    otpContainer.classList.remove("hidden");
-                    requestBtn.classList.add("hidden");
-                } catch (error) {
-                    console.error("EmailJS Error:", error);
-                    alert("Failed to send OTP.");
-                    requestBtn.disabled = false;
-                    requestBtn.innerText = "Request OTP to Change Password";
-                }
-            };
-        }
-
-        if (verifyBtn) {
-            verifyBtn.onclick = () => {
-                if (otpInput.value.trim() === generatedOTP) {
-                    const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-                    const adminIndex = users.findIndex(u => u.role === 'guidance');
-                    
-                    if (adminIndex !== -1) {
-                        users[adminIndex].pass = newPassInput.value;
-                        localStorage.setItem("gh_users", JSON.stringify(users));
-
-                        const session = JSON.parse(localStorage.getItem("gh_user_session"));
-                        if (session) {
-                            session.pass = newPassInput.value;
-                            localStorage.setItem("gh_user_session", JSON.stringify(session));
-                        }
-
-                        alert("Success! Your password has been updated.");
-                        otpContainer.classList.add("hidden");
-                        newPassInput.value = "";
-                        otpInput.value = "";
-                        requestBtn.classList.remove("hidden");
-                        requestBtn.disabled = false;
-                        requestBtn.innerText = "Request OTP to Change Password";
-                    }
-                } else {
-                    alert("Invalid OTP code.");
-                }
-            };
-        }
-
-        const toggleButtons = document.querySelectorAll(".settings-card .toggle-password");
-        toggleButtons.forEach((btn) => {
-            btn.onclick = () => {
-                const targetId = btn.getAttribute("data-target");
-                const input = document.getElementById(targetId);
-                const icon = btn.querySelector("i");
-                if (input.type === "password") {
-                    input.type = "text";
-                    icon.innerText = "visibility_off";
-                } else {
-                    input.type = "password";
-                    icon.innerText = "visibility";
-                }
-            };
+        const now = new Date();
+        const expiryTime = new Date(
+          now.getTime() + 15 * 60000,
+        ).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
         });
-    }
 
-    // 4. Notification System Logic
-    const notifBtn = document.getElementById("notificationBtn");
-    const notifDropdown = document.getElementById("notificationDropdown");
-    const notifBadge = document.getElementById("notifBadge");
-    const notifBody = document.getElementById("notifBody");
-    const clearNotifs = document.getElementById("clearNotifs");
-    const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    const pendingApps = appointments.filter(app => app.status === "pending");
-
-    
-    if (notifBtn) {
-        notifBtn.onclick = (e) => {
-            e.stopPropagation();
-            notifDropdown.classList.toggle("hidden");
-            if (!notifDropdown.classList.contains("hidden")) {
-                notifBadge.style.display = "none";
-                notifBadge.innerText = "0";
-            }
+        const templateParams = {
+          to_email: recipientEmail,
+          otp_code: generatedOTP,
+          time: expiryTime,
         };
-    }
 
-    // Close notification when clicking outside
-    document.addEventListener("click", (e) => {
-        if (notifDropdown && !notifDropdown.contains(e.target)) {
-            notifDropdown.classList.add("hidden");
+        requestBtn.innerText = "Sending OTP...";
+        requestBtn.disabled = true;
+
+        try {
+          await emailjs.send(
+            "service_mtv9cbi",
+            "template_gbmoria",
+            templateParams,
+          );
+          alert(`OTP Sent to ${recipientEmail}`);
+          otpContainer.classList.remove("hidden");
+          requestBtn.classList.add("hidden");
+        } catch (error) {
+          console.error("EmailJS Error:", error);
+          alert("Failed to send OTP.");
+          requestBtn.disabled = false;
+          requestBtn.innerText = "Request OTP to Change Password";
         }
-    });
-
-    if (clearNotifs) {
-        clearNotifs.onclick = () => {
-            notifBody.innerHTML = '<p class="empty-notif">No new notifications</p>';
-        };
+      };
     }
 
-    // Global helper to add a notification from anywhere
-    window.addNotification = (message) => {
-        const emptyMsg = notifBody.querySelector(".empty-notif");
-        if (emptyMsg) emptyMsg.remove();
+    if (verifyBtn) {
+      verifyBtn.onclick = () => {
+        if (otpInput.value.trim() === generatedOTP) {
+          const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+          const adminIndex = users.findIndex((u) => u.role === "guidance");
 
-        const notifItem = document.createElement("div");
-        notifItem.className = "notif-item";
-        notifItem.innerHTML = `
+          if (adminIndex !== -1) {
+            users[adminIndex].pass = newPassInput.value;
+            localStorage.setItem("gh_users", JSON.stringify(users));
+
+            const session = JSON.parse(localStorage.getItem("gh_user_session"));
+            if (session) {
+              session.pass = newPassInput.value;
+              localStorage.setItem("gh_user_session", JSON.stringify(session));
+            }
+
+            alert("Success! Your password has been updated.");
+            otpContainer.classList.add("hidden");
+            newPassInput.value = "";
+            otpInput.value = "";
+            requestBtn.classList.remove("hidden");
+            requestBtn.disabled = false;
+            requestBtn.innerText = "Request OTP to Change Password";
+          }
+        } else {
+          alert("Invalid OTP code.");
+        }
+      };
+    }
+
+    const toggleButtons = document.querySelectorAll(
+      ".settings-card .toggle-password",
+    );
+    toggleButtons.forEach((btn) => {
+      btn.onclick = () => {
+        const targetId = btn.getAttribute("data-target");
+        const input = document.getElementById(targetId);
+        const icon = btn.querySelector("i");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.innerText = "visibility_off";
+        } else {
+          input.type = "password";
+          icon.innerText = "visibility";
+        }
+      };
+    });
+  }
+
+  // 4. Notification System Logic
+  const notifBtn = document.getElementById("notificationBtn");
+  const notifDropdown = document.getElementById("notificationDropdown");
+  const notifBadge = document.getElementById("notifBadge");
+  const notifBody = document.getElementById("notifBody");
+  const clearNotifs = document.getElementById("clearNotifs");
+  const appointments =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const pendingApps = appointments.filter((app) => app.status === "pending");
+
+  if (notifBtn) {
+    notifBtn.onclick = (e) => {
+      e.stopPropagation();
+      notifDropdown.classList.toggle("hidden");
+      if (!notifDropdown.classList.contains("hidden")) {
+        notifBadge.style.display = "none";
+        notifBadge.innerText = "0";
+      }
+    };
+  }
+
+  // Close notification when clicking outside
+  document.addEventListener("click", (e) => {
+    if (notifDropdown && !notifDropdown.contains(e.target)) {
+      notifDropdown.classList.add("hidden");
+    }
+  });
+
+  if (clearNotifs) {
+    clearNotifs.onclick = () => {
+      notifBody.innerHTML = '<p class="empty-notif">No new notifications</p>';
+    };
+  }
+
+  // Global helper to add a notification from anywhere
+  window.addNotification = (message) => {
+    const emptyMsg = notifBody.querySelector(".empty-notif");
+    if (emptyMsg) emptyMsg.remove();
+
+    const notifItem = document.createElement("div");
+    notifItem.className = "notif-item";
+    notifItem.innerHTML = `
             <p>${message}</p>
             <small>${new Date().toLocaleTimeString()}</small>
         `;
-        notifBody.prepend(notifItem);
+    notifBody.prepend(notifItem);
 
-        const currentCount = parseInt(notifBadge.innerText || 0);
-        notifBadge.innerText = currentCount + 1;
-        notifBadge.style.display = "block";
-    };
-    if (pendingApps.length > 0) {
-        window.addNotification(`You have ${pendingApps.length} pending appointment(s) to review.`);
-    }
+    const currentCount = parseInt(notifBadge.innerText || 0, 10);
+    notifBadge.innerText = currentCount + 1;
+    notifBadge.style.display = "block";
+  };
+  if (pendingApps.length > 0) {
+    window.addNotification(
+      `You have ${pendingApps.length} pending appointment(s) to review.`,
+    );
+  }
 
-    // 5. Global Action Listeners
-    content.addEventListener("click", (e) => {
-        if (e.target.closest("#printStudentBtn")) printReport("students");
-        if (e.target.closest("#printAnalyticsBtn")) printReport("analytics");
-    });
+  // 5. Global Action Listeners
+  content.addEventListener("click", (e) => {
+    if (e.target.closest("#printStudentBtn")) printReport("students");
+    if (e.target.closest("#printAnalyticsBtn")) printReport("analytics");
+  });
 
-    const logoutBtn = document.getElementById("adminLogoutBtn");
-    if (logoutBtn) logoutBtn.onclick = onLogout;
+  const logoutBtn = document.getElementById("adminLogoutBtn");
+  if (logoutBtn) logoutBtn.onclick = onLogout;
 }
 function getAnalytics() {
   const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const users = JSON.parse(localStorage.getItem("gh_users")) || [];
 
   // Updated yearBreakdown to include Irregular status
-  const yearBreakdown = { 
-    "1st Year": 0, 
-    "2nd Year": 0, 
-    "3rd Year": 0, 
+  const yearBreakdown = {
+    "1st Year": 0,
+    "2nd Year": 0,
+    "3rd Year": 0,
     "4th Year": 0,
-    "Irregular": 0
+    Irregular: 0,
   };
   const courseBreakdown = {};
   const statusBreakdown = { pending: 0, approved: 0, rejected: 0 };
-  
-  const dailyTrends = {}; 
-  const reasonFrequency = {}; 
 
-  apps.forEach(app => {
+  const dailyTrends = {};
+  const reasonFrequency = {};
+
+  apps.forEach((app) => {
     // 1. Status Tracking
-    if (statusBreakdown[app.status] !== undefined) statusBreakdown[app.status]++;
+    if (statusBreakdown[app.status] !== undefined)
+      statusBreakdown[app.status]++;
 
     // 2. Daily Volume Trend
     const date = new Date(app.createdAt || Date.now()).toLocaleDateString();
     dailyTrends[date] = (dailyTrends[date] || 0) + 1;
 
-
-
     // 4. Demographic cross-referencing
-    const student = users.find(u => u.email === app.studentEmail);
+    const student = users.find((u) => u.email === app.studentEmail);
     if (student) {
       if (student.yearLevel && yearBreakdown[student.yearLevel] !== undefined) {
         yearBreakdown[student.yearLevel]++;
       }
       if (student.course) {
-        courseBreakdown[student.course] = (courseBreakdown[student.course] || 0) + 1;
+        courseBreakdown[student.course] =
+          (courseBreakdown[student.course] || 0) + 1;
       }
     }
   });
@@ -872,27 +939,27 @@ function getAnalytics() {
   const avgDaily = dates.length ? (apps.length / dates.length).toFixed(1) : 0;
 
   // Notification Logic
-const notifBtn = document.getElementById("notificationBtn");
-const notifDropdown = document.getElementById("notificationDropdown");
-const notifBadge = document.getElementById("notifBadge");
-const notifBody = document.getElementById("notifBody");
+  const notifBtn = document.getElementById("notificationBtn");
+  const notifDropdown = document.getElementById("notificationDropdown");
+  const notifBadge = document.getElementById("notifBadge");
+  const notifBody = document.getElementById("notifBody");
 
-if (notifBtn) {
+  if (notifBtn) {
     notifBtn.onclick = (e) => {
-        e.stopPropagation();
-        notifDropdown.classList.toggle("hidden");
-        // Reset badge when opened
-        notifBadge.style.display = "none";
+      e.stopPropagation();
+      notifDropdown.classList.toggle("hidden");
+      // Reset badge when opened
+      notifBadge.style.display = "none";
     };
-}
+  }
 
-// Close dropdown when clicking outside
-document.addEventListener("click", () => {
+  // Close dropdown when clicking outside
+  document.addEventListener("click", () => {
     if (notifDropdown) notifDropdown.classList.add("hidden");
-});
+  });
 
-// Function to add a notification (call this whenever an action happens)
-window.addNotification = (message) => {
+  // Function to add a notification (call this whenever an action happens)
+  window.addNotification = (message) => {
     const emptyMsg = notifBody.querySelector(".empty-notif");
     if (emptyMsg) emptyMsg.remove();
 
@@ -904,27 +971,30 @@ window.addNotification = (message) => {
     `;
     notifBody.prepend(notifItem);
 
-    notifBadge.innerText = parseInt(notifBadge.innerText || 0) + 1;
+    notifBadge.innerText = parseInt(notifBadge.innerText || 0, 10) + 1;
     notifBadge.style.display = "block";
-};
+  };
 
   return {
     totalApps: apps.length,
     approved: statusBreakdown.approved,
     pending: statusBreakdown.pending,
-    totalStudents: users.filter(u => u.role === "student").length,
+    totalStudents: users.filter((u) => u.role === "student").length,
     // Safely handling type checks with optional chaining
-    academic: apps.filter(a => a.type?.toLowerCase().includes("academic")).length,
-    personal: apps.filter(a => a.type?.toLowerCase().includes("personal")).length,
-    career: apps.filter(a => a.type?.toLowerCase().includes("career")).length,
+    academic: apps.filter((a) => a.type?.toLowerCase().includes("academic"))
+      .length,
+    personal: apps.filter((a) => a.type?.toLowerCase().includes("personal"))
+      .length,
+    career: apps.filter((a) => a.type?.toLowerCase().includes("career")).length,
     yearBreakdown,
     courseBreakdown,
     statusBreakdown,
     reasonFrequency,
     avgDaily,
-    mostActiveYear: Object.keys(yearBreakdown).reduce((a, b) => 
-      yearBreakdown[a] > yearBreakdown[b] ? a : b, "N/A"
-    )
+    mostActiveYear: Object.keys(yearBreakdown).reduce(
+      (a, b) => (yearBreakdown[a] > yearBreakdown[b] ? a : b),
+      "N/A",
+    ),
   };
 }
 
@@ -966,9 +1036,9 @@ export function printReport(type) {
           </tr>
         </thead>
         <tbody>
-          <tr><td>Academic</td><td>${stats.academic}</td><td>${((stats.academic/stats.totalApps)*100).toFixed(1)}%</td></tr>
-          <tr><td>Personal</td><td>${stats.personal}</td><td>${((stats.personal/stats.totalApps)*100).toFixed(1)}%</td></tr>
-          <tr><td>Career</td><td>${stats.career}</td><td>${((stats.career/stats.totalApps)*100).toFixed(1)}%</td></tr>
+          <tr><td>Academic</td><td>${stats.academic}</td><td>${((stats.academic / stats.totalApps) * 100).toFixed(1)}%</td></tr>
+          <tr><td>Personal</td><td>${stats.personal}</td><td>${((stats.personal / stats.totalApps) * 100).toFixed(1)}%</td></tr>
+          <tr><td>Career</td><td>${stats.career}</td><td>${((stats.career / stats.totalApps) * 100).toFixed(1)}%</td></tr>
         </tbody>
       </table>
     `;
@@ -987,15 +1057,19 @@ export function printReport(type) {
           </tr>
         </thead>
         <tbody>
-          ${students.map(std => `
+          ${students
+            .map(
+              (std) => `
             <tr>
               <td>${std.name}</td>
-              <td>${std.yearLevel || 'N/A'}</td>
-              <td>${std.course || 'N/A'}</td>
+              <td>${std.yearLevel || "N/A"}</td>
+              <td>${std.course || "N/A"}</td>
               <td>${std.email}</td>
               <td>${std.id}</td>
             </tr>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     `;

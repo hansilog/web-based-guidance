@@ -372,28 +372,29 @@ function attachBookingListener(session) {
 
     // 2. Send via EmailJS (Optional/Integration)
     const guidanceEmails = users
-  .filter(u => u.role === "guidance")
-  .map(u => u.email) // Create an array of just the emails
-  .join(",");
+      .filter((u) => u.role === "guidance")
+      .map((u) => u.email) // Create an array of just the emails
+      .join(",");
 
-    emailjs.send("service_mtv9cbi", "template_mublumh", {
-    subject_line: "New Appointment Request - " + session.name,
-    to_email: guidanceEmails, 
-    recipient_name: "Guidance Admin",
-    
-    // 2. Dynamic Content
-    header_title: "New Appointment Request",
-    main_message: `A new appointment request has been submitted by ${session.name}. Please review the details below.`,
-    
-    // 3. Table Data
-    app_type: newApp.type,
-    app_date: newApp.date,
-    app_time: newApp.time,
-    status: "Pending", // Default for new requests
-    
-    // 4. Student Notes
-    notes: newApp.notes || "No notes provided by student."
-})
+    emailjs
+      .send("service_mtv9cbi", "template_mublumh", {
+        subject_line: `New Appointment Request - ${session.name}`,
+        to_email: guidanceEmails,
+        recipient_name: "Guidance Admin",
+
+        // 2. Dynamic Content
+        header_title: "New Appointment Request",
+        main_message: `A new appointment request has been submitted by ${session.name}. Please review the details below.`,
+
+        // 3. Table Data
+        app_type: newApp.type,
+        app_date: newApp.date,
+        app_time: newApp.time,
+        status: "Pending", // Default for new requests
+
+        // 4. Student Notes
+        notes: newApp.notes || "No notes provided by student.",
+      })
       .then((res) => {
         console.log("Email Sent Successfully!", res.status, res.text);
         alert("Success! Appointment booked and Admin notified.");
