@@ -5,15 +5,26 @@ emailjs.init("6_rFpZEVOh3AVEsIM");
 // --- VIEW COMPONENTS ---
 
 export function renderAppointmentsTable() {
-  const rawAppointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  
+  // FIXED: Implemented clean multi-tier sorting for guidance dashboards
   const appointments = [...rawAppointments].sort((a, b) => {
-    // 1. Prioritize 'pending' status
-    if (a.status === "pending" && b.status !== "pending") return -1;
-    if (a.status !== "pending" && b.status === "pending") return 1;
+    const statusRank = {
+      "pending": 1,
+      "approved": 2,
+      "rejected": 3,
+      "cancelled": 3
+    };
 
-    // 2. If both have the same status, sort by ID descending (newest first)
-    return b.id - a.id;
+    const rankA = statusRank[a.status.toLowerCase()] || 4;
+    const rankB = statusRank[b.status.toLowerCase()] || 4;
+
+    if (rankA !== rankB) {
+      return rankA - rankB; 
+    }
+
+    // Secondary fallback: Sort by date chronological timeline execution order
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   return `
@@ -39,9 +50,12 @@ export function renderAppointmentsTable() {
                     ${
                       appointments.length > 0
                         ? appointments
-                            .map(
-                              (app) => `
-                        <tr>
+                            .map((app) => {
+                              const isCancelled = app.status === "cancelled";
+                              const isPending = app.status === "pending";
+
+                              return `
+                        <tr style="${isCancelled ? 'opacity: 0.65; background-color: #f8fafc;' : ''}">
                             <td data-label="Student">
                                 <div class="user-info">
                                     <span class="user-name">${app.studentName}</span>
@@ -55,15 +69,31 @@ export function renderAppointmentsTable() {
                                     <small>${app.time}</small>
                                 </div>
                             </td>
-                            <td data-label="Status"><span class="status-pill ${app.status}">${app.status}</span></td>
+                            <td data-label="Status">
+                                <span class="status-pill ${app.status.toLowerCase()}">${app.status}</span>
+                            </td>
                             <td data-label="Actions">
                                 <div class="action-btns">
-                                    <button class="btn-approve" onclick="openActionModal(${app.id}, 'approved')"><i class="material-icons">check</i></button>
-                                    <button class="btn-reject" onclick="openActionModal(${app.id}, 'rejected')"><i class="material-icons">close</i></button>
+                                    ${isPending ? `
+                                        <button class="btn-approve" onclick="openActionModal(${app.id}, 'approved')" title="Approve Request">
+                                            <i class="material-icons">check</i>
+                                        </button>
+                                        <button class="btn-reject" onclick="openActionModal(${app.id}, 'rejected')" title="Reject Request">
+                                            <i class="material-icons">close</i>
+                                        </button>
+                                    ` : `
+                                        ${isCancelled ? `
+                                            <span style="color: #64748b; font-size: 0.85rem; font-style: italic; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="material-icons" style="font-size: 14px;">remove_circle_outline</i> Cancelled by Student
+                                            </span>
+                                        ` : `
+                                            <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Processed</span>
+                                        `}
+                                    `}
                                 </div>
                             </td>
-                        </tr>`,
-                            )
+                        </tr>`;
+                            })
                             .join("")
                         : '<tr><td colspan="5" class="empty-row">No appointment requests found.</td></tr>'
                     }
@@ -73,7 +103,6 @@ export function renderAppointmentsTable() {
     </div>
   `;
 }
-
 function renderConfirmationModal(id, status) {
   const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const app = apps.find((a) => a.id === id);

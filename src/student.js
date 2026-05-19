@@ -80,8 +80,7 @@ export function renderRightSidebar(myApps) {
 }
 export function renderDashboard(session = {}) {
   // 1. Data Retrieval & Filtering
-  const appointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const myApps = appointments.filter(
     (a) => a.studentId === session.id || a.studentEmail === session.email,
   );
@@ -122,23 +121,39 @@ export function renderDashboard(session = {}) {
                     <div class="table-responsive">
                         <table>
                             <thead>
-                                <tr><th>Date</th><th>Type</th><th>Status</th></tr>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th style="text-align: center;">Action</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 ${
                                   myApps
                                     .slice(0, 5)
-                                    .map(
-                                      (app) => `
+                                    .map((app) => {
+                                      // Determine if the appointment can still be cancelled
+                                      const canCancel = app.status === "pending" || app.status === "approved";
+
+                                      return `
                                     <tr>
                                         <td><strong>${format(new Date(app.date), "MMMM dd, yyyy")}</strong></td>
                                         <td>${app.type}</td>
                                         <td><span class="status-pill ${app.status.toLowerCase()}">${app.status}</span></td>
+                                        <td style="text-align: center;">
+                                            ${canCancel ? `
+                                                <button class="cancel-btn-table" data-id="${app.id}" title="Cancel Appointment" style="background: none; border: none; color: #ef4444; cursor: pointer; display: inline-flex; align-items: center; padding: 4px;">
+                                                    <i class="material-icons" style="font-size: 18px;">cancel</i>
+                                                </button>
+                                            ` : `<span style="color: #94a3b8; font-size: 12px;">—</span>`}
+                                        </td>
                                     </tr>
-                                `,
-                                    )
+                                `;
+                                    })
                                     .join("") ||
-                                  '<tr><td colspan="3" style="text-align:center; padding:20px;">No appointments yet.</td></tr>'
+                                  // FIXED: Updated colspan to 4 to cover the new layout column
+                                  '<tr><td colspan="4" style="text-align:center; padding:20px;">No appointments yet.</td></tr>'
                                 }
                             </tbody>
                         </table>
@@ -151,10 +166,28 @@ export function renderDashboard(session = {}) {
     `;
 }
 export function renderBookingForm(session = {}) {
-  // 1. Get data for the sidebar
-  const allAppointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  // 1. Get appointments data for the sidebar
+  const allAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const myApps = allAppointments.filter((a) => a.studentId === session.id);
+
+  // 2. Fetch global users database and filter down to available counselors
+  const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
+  const counselors = allUsers.filter((u) => u.role === "guidance");
+
+  // 3. Programmatically compile the HTML option elements for the dropdown menu
+  let counselorOptions = `<option value="">Select a preferred counselor...</option>`;
+  
+  // Add an automated "any available" fallback choice first
+  counselorOptions += `<option value="auto">Any Available Counselor (Round-Robin)</option>`;
+  
+  // Append choices for all real registered guidance objects found in database
+  counselors.forEach((c) => {
+    counselorOptions += `
+      <option value="${c.id}" data-name="${c.name}">
+        ${c.name} — (${c.specialty || 'General Counseling'})
+      </option>
+    `;
+  });
 
   return `
     <div class="dashboard-wrapper">
@@ -162,13 +195,22 @@ export function renderBookingForm(session = {}) {
             <div class="dashboard-hero" style="padding-top: 40px;">
                 <span class="badge">Scheduling</span>
                 <h1>Book an Appointment</h1>
-                <p>Select a date and time that works for you.</p>
+                <p>Select a date, time, and counselor that works for you.</p>
             </div>
 
             <div class="table-card booking-container">
                 <div id="booking-error" class="error-banner hidden"></div>
                 
                 <form id="appointment-form" class="styled-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="appCounselor">Assigned Guidance Counselor</label>
+                            <select id="appCounselor" required>
+                                ${counselorOptions}
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label for="appType">Counseling Type</label>
@@ -193,8 +235,10 @@ export function renderBookingForm(session = {}) {
                     </div>
 
                     <div class="form-group">
-                        <label for="appNotes">Additional Notes (Optional)</label>
-                        <textarea id="appNotes" rows="4" placeholder="Briefly describe your concern..."></textarea>
+                        <div class="form-group">
+                            <label for="appNotes">Additional Notes (Optional)</label>
+                            <textarea id="appNotes" rows="4" placeholder="Briefly describe your concern..."></textarea>
+                        </div>
                     </div>
 
                     <div class="form-actions">
@@ -349,16 +393,29 @@ function attachBookingListener(session) {
     e.preventDefault();
     const submitBtn = document.getElementById("submitBooking");
 
+    // NEW: Get Counselor Dropdown elements
+    const counselorSelect = document.getElementById("appCounselor");
+    const selectedOption = counselorSelect.options[counselorSelect.selectedIndex];
+    const isAutoAssign = counselorSelect.value === "auto";
+
     const newApp = {
       id: Date.now(),
       studentId: session.id,
       studentName: session.name,
       studentEmail: session.email,
+      
+      // NEW: Dynamic counselor storage assignments
+      counselorId: isAutoAssign ? null : parseInt(counselorSelect.value, 10),
+      counselorName: isAutoAssign ? "Unassigned (Auto)" : selectedOption.getAttribute("data-name"),
+      
       type: document.getElementById("appType").value,
       date: document.getElementById("appDate").value,
       time: document.getElementById("appTime").value,
       notes: document.getElementById("appNotes").value,
       status: "pending",
+      counselorNotes: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     submitBtn.innerText = "Sending...";
@@ -368,40 +425,56 @@ function attachBookingListener(session) {
     const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
     allApps.push(newApp);
     localStorage.setItem("gh_appointments", JSON.stringify(allApps));
+    
+    // 2. Resolve target email routes
     const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+    let targetEmails = "";
+    let recipientName = "Guidance Team";
 
-    // 2. Send via EmailJS (Optional/Integration)
-    const guidanceEmails = users
-      .filter((u) => u.role === "guidance")
-      .map((u) => u.email) // Create an array of just the emails
-      .join(",");
+    if (isAutoAssign) {
+      // Send to ALL counselors if auto-assignment is requested
+      targetEmails = users
+        .filter((u) => u.role === "guidance")
+        .map((u) => u.email)
+        .join(",");
+    } else {
+      // Send ONLY to the selected counselor's registered email
+      const chosenCounselor = users.find((u) => u.id === newApp.counselorId);
+      if (chosenCounselor) {
+        targetEmails = chosenCounselor.email;
+        recipientName = chosenCounselor.name;
+      } else {
+        // Fallback catch-all just in case
+        targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
+      }
+    }
 
+    // 3. Send via EmailJS
     emailjs
       .send("service_mtv9cbi", "template_mublumh", {
         subject_line: `New Appointment Request - ${session.name}`,
-        to_email: guidanceEmails,
-        recipient_name: "Guidance Admin",
+        to_email: targetEmails, // Optimized single or group target routing string
+        recipient_name: recipientName,
 
-        // 2. Dynamic Content
+        // Dynamic Content
         header_title: "New Appointment Request",
-        main_message: `A new appointment request has been submitted by ${session.name}. Please review the details below.`,
+        main_message: `A new appointment request has been submitted by ${session.name} and assigned to ${newApp.counselorName}. Please review the details below.`,
 
-        // 3. Table Data
+        // Table Data
         app_type: newApp.type,
         app_date: newApp.date,
         app_time: newApp.time,
-        status: "Pending", // Default for new requests
+        status: "Pending",
 
-        // 4. Student Notes
+        // Student Notes
         notes: newApp.notes || "No notes provided by student.",
       })
       .then((res) => {
         console.log("Email Sent Successfully!", res.status, res.text);
-        alert("Success! Appointment booked and Admin notified.");
+        alert(`Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`);
         window.location.reload();
       })
       .catch((err) => {
-        // This alert will now tell you EXACTLY what EmailJS is complaining about
         console.error("EmailJS Detailed Error:", err);
         alert(
           `Email Error: ${err.text} (Code: ${err.status}). Booking still saved locally.`,
@@ -411,6 +484,94 @@ function attachBookingListener(session) {
   };
 }
 
+export function attachCancelListeners() {
+  const container = document.getElementById("app");
+  if (!container) return;
+
+  container.addEventListener("click", (e) => {
+    // FIXED: Updated target class to track your table layout element ".cancel-btn-table"
+    const cancelBtn = e.target.closest(".cancel-btn-table");
+    if (!cancelBtn) return;
+
+    const appId = parseInt(cancelBtn.dataset.id, 10);
+
+    // Render custom modal instead of native browser confirm box
+    showCustomConfirmModal({
+      title: "Cancel Appointment",
+      message: "Are you sure you want to cancel this counseling appointment request? This action cannot be undone.",
+      onConfirm: () => {
+        // 1. Fetch current datasets
+        const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+        
+        // 2. Locate and modify the target state values
+        const updatedApps = allApps.map(app => {
+          if (app.id === appId) {
+            return {
+              ...app,
+              status: "cancelled",
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return app;
+        });
+
+        // 3. Commit mutations back down to local disk
+        localStorage.setItem("gh_appointments", JSON.stringify(updatedApps));
+
+        // 4. Send automatic EmailJS alert if optimization logic exists
+        const targetApp = allApps.find(a => a.id === appId);
+        if (targetApp && targetApp.counselorId && typeof notifyCounselorOfCancellation === "function") {
+           notifyCounselorOfCancellation(targetApp);
+        }
+
+        // 5. Hard refresh views to visually demonstrate updated pipeline collections
+        window.location.reload();
+      }
+    });
+  });
+}
+
+// --- PRIVATE MODAL UI HELPER ---
+function showCustomConfirmModal({ title, message, onConfirm }) {
+  // Create a overlay wrapper element block
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "custom-modal-overlay";
+  
+  // Inject clean HTML template structural layout
+  modalOverlay.innerHTML = `
+    <div class="custom-modal-card">
+      <div class="custom-modal-header">
+        <i class="material-icons error-icon">warning</i>
+        <h3>${title}</h3>
+      </div>
+      <div class="custom-modal-body">
+        <p>${message}</p>
+      </div>
+      <div class="custom-modal-actions">
+        <button type="button" class="modal-btn secondary-btn" id="modal-cancel-action">Keep Appointment</button>
+        <button type="button" class="modal-btn danger-btn" id="modal-confirm-action">Yes, Cancel It</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modalOverlay);
+
+  // Focus trap lifecycle configuration handlers
+  const confirmBtn = modalOverlay.querySelector("#modal-confirm-action");
+  const cancelBtn = modalOverlay.querySelector("#modal-cancel-action");
+
+  const closeModal = () => modalOverlay.remove();
+
+  confirmBtn.onclick = () => {
+    closeModal();
+    onConfirm();
+  };
+
+  cancelBtn.onclick = closeModal;
+  modalOverlay.onclick = (e) => {
+    if (e.target === modalOverlay) closeModal();
+  };
+}
 // --- MAIN RENDERER ---
 
 export function renderStudentView(root, session, onLogout) {
@@ -446,6 +607,7 @@ export function renderStudentView(root, session, onLogout) {
 
   setupStudentListeners(onLogout, session);
 }
+attachCancelListeners();
 
 function setupStudentListeners(onLogout, session) {
   const content = document.getElementById("dynamic-content");
