@@ -1,12 +1,20 @@
-import "./styles/guidance.css";
 import emailjs from "@emailjs/browser";
+import "./styles/guidance.css";
+import { listenForRealTimeUpdates } from "./index.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 // --- VIEW COMPONENTS ---
 
 export function renderAppointmentsTable() {
   const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  
+  listenForRealTimeUpdates(() => {
+    const tableContainer = document.getElementById("adminTableContainer"); 
+    if (tableContainer) {
+      // Re-read local storage, resort, and swap out the HTML content smoothly
+      tableContainer.innerHTML = renderAppointmentsTable();
+      // Re-hook any specific table click actions if necessary
+    }
+  });
   // FIXED: Implemented clean multi-tier sorting for guidance dashboards
   const appointments = [...rawAppointments].sort((a, b) => {
     const statusRank = {

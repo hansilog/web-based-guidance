@@ -8,6 +8,7 @@ import {
   getDate,
   isSameDay,
 } from "date-fns";
+import { listenForRealTimeUpdates } from "./index.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -81,14 +82,37 @@ export function renderRightSidebar(myApps) {
 export function renderDashboard(session = {}) {
   // 1. Data Retrieval & Filtering
   const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const myApps = appointments.filter(
+  
+  // Filter appointments belonging to this specific logged-in student
+  const rawMyApps = appointments.filter(
     (a) => a.studentId === session.id || a.studentEmail === session.email,
   );
+
+  // 2. Custom Multi-Tier Sorting for Students
+  const myApps = [...rawMyApps].sort((a, b) => {
+    const studentStatusRank = {
+      "approved": 1,   // Top Priority: Show confirmed active calendar schedules first
+      "pending": 2,    // Second Priority: Show requests currently in queue review
+      "rejected": 3,   // Low Priority: Historical logs
+      "cancelled": 3   // Low Priority: Historical logs
+    };
+
+    const rankA = studentStatusRank[a.status.toLowerCase()] || 4;
+    const rankB = studentStatusRank[b.status.toLowerCase()] || 4;
+
+    // Sort by priority rank grouping first
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
+
+    // Secondary Fallback: Chronological order (closest upcoming date first)
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
+  });
 
   const pendingCount = myApps.filter((a) => a.status === "pending").length;
   const approvedCount = myApps.filter((a) => a.status === "approved").length;
 
-  // 2. Return the combined view
+  // 3. Return the combined updated layout view
   return `
         <div class="dashboard-wrapper">
             <div class="dashboard-main-col">
@@ -133,11 +157,20 @@ export function renderDashboard(session = {}) {
                                   myApps
                                     .slice(0, 5)
                                     .map((app) => {
-                                      // Determine if the appointment can still be cancelled
-                                      const canCancel = app.status === "pending" || app.status === "approved";
+                                      // Date evaluation checks
+                                      const appointmentDate = new Date(app.date);
+                                      const today = new Date();
+                                      today.setHours(0, 0, 0, 0);
+                                      appointmentDate.setHours(0, 0, 0, 0);
+
+                                      const isPastDate = appointmentDate < today;
+                                      const isInactiveLog = app.status === "cancelled" || app.status === "rejected";
+
+                                      // Core cancellation constraints validation rule
+                                      const canCancel = app.status === "pending" || (app.status === "approved" && !isPastDate);
 
                                       return `
-                                    <tr>
+                                    <tr style="${isInactiveLog || (app.status === "approved" && isPastDate) ? 'opacity: 0.55; background-color: #f8fafc;' : ''}">
                                         <td><strong>${format(new Date(app.date), "MMMM dd, yyyy")}</strong></td>
                                         <td>${app.type}</td>
                                         <td><span class="status-pill ${app.status.toLowerCase()}">${app.status}</span></td>
@@ -146,13 +179,18 @@ export function renderDashboard(session = {}) {
                                                 <button class="cancel-btn-table" data-id="${app.id}" title="Cancel Appointment" style="background: none; border: none; color: #ef4444; cursor: pointer; display: inline-flex; align-items: center; padding: 4px;">
                                                     <i class="material-icons" style="font-size: 18px;">cancel</i>
                                                 </button>
-                                            ` : `<span style="color: #94a3b8; font-size: 12px;">—</span>`}
+                                            ` : `
+                                                ${app.status === "approved" && isPastDate ? `
+                                                    <i class="material-icons" title="Completed Past Session" style="color: #10b981; font-size: 18px; cursor: default; vertical-align: middle;">check_circle</i>
+                                                ` : `
+                                                    <span style="color: #94a3b8; font-size: 12px;">—</span>
+                                                `}
+                                            `}
                                         </td>
                                     </tr>
                                 `;
                                     })
                                     .join("") ||
-                                  // FIXED: Updated colspan to 4 to cover the new layout column
                                   '<tr><td colspan="4" style="text-align:center; padding:20px;">No appointments yet.</td></tr>'
                                 }
                             </tbody>
@@ -489,13 +527,11 @@ export function attachCancelListeners() {
   if (!container) return;
 
   container.addEventListener("click", (e) => {
-    // FIXED: Updated target class to track your table layout element ".cancel-btn-table"
     const cancelBtn = e.target.closest(".cancel-btn-table");
     if (!cancelBtn) return;
 
     const appId = parseInt(cancelBtn.dataset.id, 10);
 
-    // Render custom modal instead of native browser confirm box
     showCustomConfirmModal({
       title: "Cancel Appointment",
       message: "Are you sure you want to cancel this counseling appointment request? This action cannot be undone.",
@@ -503,14 +539,17 @@ export function attachCancelListeners() {
         // 1. Fetch current datasets
         const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
         
+        let targetApp = null;
+
         // 2. Locate and modify the target state values
         const updatedApps = allApps.map(app => {
           if (app.id === appId) {
-            return {
+            targetApp = {
               ...app,
               status: "cancelled",
               updatedAt: new Date().toISOString()
             };
+            return targetApp;
           }
           return app;
         });
@@ -518,17 +557,71 @@ export function attachCancelListeners() {
         // 3. Commit mutations back down to local disk
         localStorage.setItem("gh_appointments", JSON.stringify(updatedApps));
 
-        // 4. Send automatic EmailJS alert if optimization logic exists
-        const targetApp = allApps.find(a => a.id === appId);
-        if (targetApp && targetApp.counselorId && typeof notifyCounselorOfCancellation === "function") {
-           notifyCounselorOfCancellation(targetApp);
+        // 4. Send automatic EmailJS alert to the counselor before refreshing
+        if (targetApp) {
+          notifyCounselorOfCancellation(targetApp);
+        } else {
+          // If fallback is required due to synchronous timing issues
+          window.location.reload();
         }
-
-        // 5. Hard refresh views to visually demonstrate updated pipeline collections
-        window.location.reload();
       }
     });
   });
+}
+
+// --- EmailJS Counselor Cancellation Notification Engine ---
+function notifyCounselorOfCancellation(appointment) {
+  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+  let targetEmails = "";
+  let recipientName = "Guidance Team";
+
+  // 1. Resolve where this email should go based on counselor assignment
+  if (appointment.counselorId) {
+    const chosenCounselor = users.find((u) => u.id === appointment.counselorId);
+    if (chosenCounselor) {
+      targetEmails = chosenCounselor.email;
+      recipientName = chosenCounselor.name;
+    }
+  }
+
+  // 2. Fallback: If no specific counselor was assigned, email the entire guidance team
+  if (!targetEmails) {
+    targetEmails = users
+      .filter((u) => u.role === "guidance")
+      .map((u) => u.email)
+      .join(",");
+  }
+
+  // 3. Dispatch data object payload via EmailJS
+  emailjs
+    .send("service_mtv9cbi", "template_mublumh", {
+      subject_line: `Cancellation Alert: Appointment Cancelled by ${appointment.studentName}`,
+      to_email: targetEmails,
+      recipient_name: recipientName,
+
+      // Dynamic Display Text Card Configurations
+      header_title: "Appointment Cancelled By Student",
+      main_message: `Please look over your schedule logs. The following appointment slot has been officially cancelled by ${appointment.studentName}.`,
+
+      // Table Details Layout Mapping
+      app_type: appointment.type,
+      app_date: appointment.date,
+      app_time: appointment.time,
+      status: "Cancelled",
+
+      // Fallback description handling
+      notes: appointment.notes || "No additional comments left by student.",
+    })
+    .then((res) => {
+      console.log("Cancellation Email Sent Successfully!", res.status, res.text);
+      alert("Appointment successfully cancelled. The counselor has been notified via email.");
+      window.location.reload(); // Refresh viewport layout after successful email handshake
+    })
+    .catch((err) => {
+      console.error("EmailJS Cancellation Error:", err);
+      alert(`Cancelled locally, but failed to alert counselor via email (Code: ${err.status}).`);
+      window.location.reload(); // Refresh anyway so the dashboard stays accurate locally
+    });
 }
 
 // --- PRIVATE MODAL UI HELPER ---
@@ -605,9 +698,27 @@ export function renderStudentView(root, session, onLogout) {
     </div>
   `;
 
+  // 1. Initialize click bindings for buttons inside the view
   setupStudentListeners(onLogout, session);
+  
+  // 2. FIXED: Attach initial cancel listener to the freshly rendered layout
+  attachCancelListeners();
+
+  // 3. FIXED: Moved sync listener INSIDE the initialization scope where 'root' and 'session' live
+  listenForRealTimeUpdates(() => {
+    const content = document.getElementById("dynamic-content");
+    const activeNav = document.querySelector(".nav-item.active");
+    
+    // Safety check: Only auto-refresh if the student is currently viewing the "dashboard" screen
+    if (content && activeNav && activeNav.getAttribute("data-target") === "dashboard") {
+      console.log("Synchronizing student dashboard metrics...");
+      content.innerHTML = renderDashboard(session);
+      
+      // CRITICAL: Re-bind event listeners to the fresh dashboard table DOM elements!
+      attachCancelListeners(); 
+    }
+  });
 }
-attachCancelListeners();
 
 function setupStudentListeners(onLogout, session) {
   const content = document.getElementById("dynamic-content");
@@ -646,14 +757,14 @@ function setupStudentListeners(onLogout, session) {
 
       if (target === "dashboard") {
         content.innerHTML = renderDashboard(session);
+        // ADDED: Make sure cancel triggers exist if they click back to dashboard
+        attachCancelListeners();
       } else if (target === "book") {
         content.innerHTML = renderBookingForm(session);
         attachBookingListener(session);
       } else if (target === "records") {
         content.innerHTML = renderHistory(session);
-      }
-      // ADDED: Settings Target
-      else if (target === "settings") {
+      } else if (target === "settings") {
         renderSettings(content, session);
       }
     };
