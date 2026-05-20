@@ -25,7 +25,7 @@
 .content-area {
   /* This is the most important line for your layout */
   margin-left: var(--sidebar-width, 280px);
-
+  width: 100%;
   flex: 1;
   padding: 40px;
   box-sizing: border-box;

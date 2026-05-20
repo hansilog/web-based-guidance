@@ -4,12 +4,16 @@ import { renderStudentView } from "./student.js";
 import { renderGuidanceView } from "./guidance.js";
 import { renderLandingPage } from "./landing.js";
 import { renderAdminView } from "./admin.js";
+import { initGoogleAuth } from "./calendar.js";
+
+// Simply import the student file here so the browser compiles it 
+// and loads window.handleStudentInlineSync into memory right away!
+import "./student.js"; 
 import "./styles/styles.css";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
 // --- CRYPTOGRAPHIC UTILITY ---
-// Securely hashes plain text strings using the browser's native Web Crypto API
 async function hashPassword(password) {
   const encoder = new TextEncoder();
   const data = encoder.encode(password);
@@ -19,7 +23,6 @@ async function hashPassword(password) {
 }
 
 // --- UPDATED SEED USERS ---
-// FIXED: Marked function as 'async' so 'await hashPassword' works properly
 const seedUsers = async () => {
   const existingUsers = localStorage.getItem("gh_users");
   if (!existingUsers) {
@@ -150,14 +153,12 @@ const seedAppointments = () => {
 };
 
 // --- HANDLERS ---
-
 function handleLogout() {
   sessionStorage.removeItem("gh_session");
   sessionStorage.removeItem("gh_entered");
   window.location.reload();
 }
 
-// FIXED: Converted to async & encrypted incoming string to match stored SHA-256 hash
 async function handleLogin(identifier, p, showError) {
   const users = JSON.parse(localStorage.getItem("gh_users")) || [];
   const inputHash = await hashPassword(p);
@@ -176,7 +177,6 @@ async function handleLogin(identifier, p, showError) {
   }
 }
 
-// FIXED: Converted to async & encrypted password before saving to data model array
 async function handleRegister(
   name,
   u,
@@ -239,11 +239,16 @@ function initApp() {
   }
 }
 
-// System Startup Lifecycle wrapper to cleanly handle asynchronous seeding rules
+// System Startup Lifecycle wrapper
 const initializeSystemSequence = async () => {
   await seedUsers();
   seedAppointments();
   initApp();
 };
+
+// 🏁 FIX: Initialize Google Auth silently without looking for the deleted listener function
+initGoogleAuth((isAuthReady) => {
+  console.log("⚡ Google Core Initialization Status:", isAuthReady);
+});
 
 document.addEventListener("DOMContentLoaded", initializeSystemSequence);

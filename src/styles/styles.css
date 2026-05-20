@@ -246,3 +246,6 @@ body {
     margin-bottom: 4px;
   }
 }
+
+/* Placeholder for the banner to reserve space even when empty */
+/* Reserved slot that keeps the layout stable */

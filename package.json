@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
-    "@google/genai": "^2.4.0"
+    "@google/genai": "^2.4.0",
+    "gapi-script": "^1.2.0"
   }
 }

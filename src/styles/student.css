@@ -814,3 +814,56 @@ td {
     transform: translateY(0);
   }
 }
+
+/* --- Google Calendar Sync Button Layout --- */
+.gcal-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #ffffff;
+  color: #3c4043;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1), 0 1px 3px 1px rgba(60,64,67,0.05);
+}
+
+/* Hover State - Smooth lift with Google blue accent */
+.gcal-sync-btn:hover {
+  background-color: #f8fafd;
+  color: #1a73e8;
+  border-color: #d2e3fc;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px 0 rgba(60,64,67,0.2), 0 4px 8px 3px rgba(60,64,67,0.1);
+}
+
+/* Active State - Click feedback downpress effect */
+.gcal-sync-btn:active {
+  background-color: #f1f3f4;
+  transform: translateY(0);
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.15);
+}
+
+/* Focus State - For accessibility via keyboard tabs */
+.gcal-sync-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+/* Loading state option if you want to disable it during network requests */
+.gcal-sync-btn:disabled {
+  background-color: #f1f3f4;
+  color: #9aa0a6;
+  border-color: #e8eaed;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

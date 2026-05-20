@@ -10,6 +10,7 @@ import {
 } from "date-fns";
 import { listenForRealTimeUpdates } from "./syncUtil.js";
 import { getPreBookingAdvice } from "./ai.js";
+import { createCalendarEvent } from "./calendar.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -19,12 +20,10 @@ export function renderRightSidebar(myApps) {
 
   // 1. Get the single next approved appointment
   const nextApp = myApps
-    .filter(
-      (a) => a.status.toLowerCase() === "approved" && new Date(a.date) >= now,
-    )
+    .filter((a) => a.status.toLowerCase() === "approved" && new Date(a.date) >= now)
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
-  // 2. Build the Calendar HTML
+  // 2. Build the Calendar HTML Grid Layout
   const startDay = getDay(startOfMonth(now));
   const totalDays = getDate(endOfMonth(now));
   const padding = Array(startDay).fill('<div class="day-num muted"></div>');
@@ -34,17 +33,13 @@ export function renderRightSidebar(myApps) {
     const currentIterationDate = new Date(now.getFullYear(), now.getMonth(), d);
     const isToday = isSameDay(currentIterationDate, now) ? "today" : "";
     const hasEvent = myApps.some(
-      (app) =>
-        isSameDay(new Date(app.date), currentIterationDate) &&
-        app.status.toLowerCase() === "approved",
-    )
-      ? "has-event"
-      : "";
+      (app) => isSameDay(new Date(app.date), currentIterationDate) && app.status.toLowerCase() === "approved"
+    ) ? "has-event" : "";
 
     days.push(`<div class="day-num ${isToday} ${hasEvent}">${d}</div>`);
   }
 
-  // 3. Return the Sidebar HTML string
+  // 3. Return the Sidebar HTML string with the INLINE click dispatcher attached
   return `
         <aside class="right-sidebar">
             <div class="next-up-card">
@@ -55,6 +50,14 @@ export function renderRightSidebar(myApps) {
                     <div class="next-app-info">
                         <h2>${format(new Date(nextApp.date), "MMMM dd, yyyy")}</h2>
                         <p>${nextApp.time} | Guidance Office</p>
+                        
+                        <button class="gcal-sync-btn" 
+                                data-date="${nextApp.date}" 
+                                data-time="${nextApp.time}" 
+                                data-type="${nextApp.type || 'Counseling Session'}"
+                                onclick="window.handleStudentInlineSync(this)">
+                          🗓️ Sync to Google Calendar
+                        </button>
                     </div>
                 `
                     : `<p style="font-size:0.8rem; color:#94a3b8; margin-top:10px;">No upcoming sessions.</p>`
@@ -116,6 +119,7 @@ export function renderDashboard(session = {}) {
 
   // 3. Return the combined updated layout view
   return `
+        
         <div class="dashboard-wrapper">
             <div class="dashboard-main-col">
                 <div class="dashboard-hero" style="padding-top: 40px;"> 
@@ -607,7 +611,7 @@ export function attachCancelListeners() {
       },
     });
   });
-}
+} 
 
 // --- EmailJS Counselor Cancellation Notification Engine ---
 function notifyCounselorOfCancellation(appointment) {
@@ -713,6 +717,77 @@ function showCustomConfirmModal({ title, message, onConfirm }) {
     if (e.target === modalOverlay) closeModal();
   };
 }
+// --- GLOBAL WINDOW GCAL INTERCEPT HANDLER ---
+window.handleStudentInlineSync = async (btn) => {
+  if (btn.disabled) return;
+
+  const dateStr = btn.getAttribute("data-date"); // e.g. "2026-05-12"
+  const timeStr = btn.getAttribute("data-time"); // e.g. "02:30 PM" or "14:30"
+  const typeStr = btn.getAttribute("data-type") || "Counseling Session";
+
+  if (!dateStr || !timeStr) {
+    console.error("❌ Google Calendar Hook Aborted: Missing structural appointment metrics.");
+    return;
+  }
+
+  console.log("🚀 Normalizing Google payload layout parameters for properties:", { dateStr, timeStr });
+
+  let cleanTime = timeStr.trim();
+  
+  // SANITIZATION STEP: Normalize 12-hour formats ("02:30 PM") into robust 24-hour targets ("14:30")
+  if (cleanTime.toLowerCase().includes("am") || cleanTime.toLowerCase().includes("pm")) {
+    const parts = cleanTime.split(" ");
+    const timePart = parts[0];
+    const modifier = parts[1] ? parts[1].toLowerCase() : "";
+    
+    const timeSegments = timePart.split(":");
+    let hours = timeSegments[0];
+    const minutes = timeSegments[1];
+    
+    if (modifier === "pm" && hours !== "12") {
+      hours = String(parseInt(hours, 10) + 12);
+    }
+    if (modifier === "am" && hours === "12") {
+      hours = "00";
+    }
+    
+    cleanTime = `${hours.padStart(2, "0")}:${minutes.substring(0, 2)}`;
+  }
+
+  try {
+    const [hoursStr, minutesStr] = cleanTime.split(":");
+    const [year, month, day] = dateStr.split("-").map(num => parseInt(num, 10));
+    
+    // Construct real Date objects locally to avoid offset zone shifting issues
+    const startEventDate = new Date(year, month - 1, day, parseInt(hoursStr, 10), parseInt(minutesStr, 10), 0);
+    const endEventDate = new Date(startEventDate);
+    endEventDate.setHours(startEventDate.getHours() + 1); // Allocate a stable 1-hour session window
+
+    btn.innerText = "🔄 Syncing...";
+    btn.disabled = true;
+
+    // Send verified standardized ISO formatting data strings directly to Google calendar client layers
+    const success = await createCalendarEvent({
+      summary: `Granby Guidance: ${typeStr}`,
+      description: "Scheduled consultation slot with the Granby Counseling Department.",
+      startTime: startEventDate.toISOString(),
+      endTime: endEventDate.toISOString()
+    });
+
+    if (success) {
+      btn.innerText = "✅ Synced to Google";
+      btn.style.backgroundColor = "#10b981";
+      btn.style.color = "#ffffff";
+    } else {
+      btn.innerText = "🗓️ Try Sync Again";
+      btn.disabled = false;
+    }
+  } catch (err) {
+    console.error("❌ Exception captured inside the Google Calendar formatting sequence:", err);
+    btn.innerText = "🗓️ Try Sync Again";
+    btn.disabled = false;
+  }
+};
 // --- MAIN RENDERER ---
 
 export function renderStudentView(root, session, onLogout) {
@@ -746,7 +821,8 @@ export function renderStudentView(root, session, onLogout) {
             </nav>
         </aside>
         
-        <main class="content-area">
+        <main class="content-area" style="padding: 40px; box-sizing: border-box; flex: 1;">
+            
             <section id="dynamic-content">${renderDashboard(session)}</section>
         </main>
 
@@ -777,32 +853,31 @@ export function renderStudentView(root, session, onLogout) {
     </div>
   `;
 
-  // 1. Initialize click bindings for buttons inside the view
   setupStudentListeners(onLogout, session);
-
-  // 2. Attach initial cancellation triggers for elements inside dashboard table
   attachCancelListeners();
-
-  // 3. NEW: Wire up the active listeners for the floating chatbot window engine
   initializeFloatingChatboxEngine();
 
-  // 4. Moved real-time sync listener INSIDE the initialization scope
+  
   listenForRealTimeUpdates(() => {
-    const content = document.getElementById("dynamic-content");
-    const activeNav = document.querySelector(".nav-item.active");
+  const content = document.getElementById("dynamic-content");
+  const activeNav = document.querySelector(".nav-item.active");
+  
+  // 1. Dashboard Routing & Persistence Guard
+  if (!activeNav || activeNav.getAttribute("data-target") !== "dashboard") {
+    // If not on dashboard, ensure the banner slot is empty to save space/distraction
 
-    if (
-      content &&
-      activeNav &&
-      activeNav.getAttribute("data-target") === "dashboard"
-    ) {
-      console.log("Synchronizing student dashboard metrics...");
-      content.innerHTML = renderDashboard(session);
-      attachCancelListeners();
-    }
-  });
+    return;
+  }
+
+  console.log("Synchronizing student dashboard metrics...");
+
+  // 2. Structural Guard: Draw dashboard shell ONCE
+  if (content && !content.querySelector(".dashboard-loaded-marker")) {
+    content.innerHTML = `<div class="dashboard-loaded-marker"></div>${renderDashboard(session)}`;
+    attachCancelListeners();
+  }
+});
 }
-
 // --- Chatbox Operational Functionality Code Core Engine ---
 function initializeFloatingChatboxEngine() {
   const chatbox = document.getElementById("floating-ai-chatbox");
@@ -813,6 +888,9 @@ function initializeFloatingChatboxEngine() {
   const viewport = document.getElementById("chatbox-messages-viewport");
 
   if (!chatbox || !openBtn || !closeBtn || !form || !input || !viewport) return;
+
+  // 🔒 CRITICAL CONCURRENCY LOCK: Prevents double-submits and layout state loop execution spikes
+  let isAiResponding = false;
 
   // Toggle visible show/hide css state rule flags
   openBtn.onclick = (e) => {
@@ -829,79 +907,105 @@ function initializeFloatingChatboxEngine() {
   };
 
   // Submit messages query loop interceptor routing pipeline
-  // Submit messages query loop interceptor routing pipeline
-  // Submit messages query loop interceptor routing pipeline
   form.onsubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation(); // Stop event bubbling to keep background updates from firing
+
+    // If an AI operation is ongoing, drop subsequent submit events immediately
+    if (isAiResponding) return;
+
     const userText = input.value.trim();
     if (!userText) return; // Prevent empty spaces
 
     // Wipe text field instantly for UX crispness
     input.value = "";
 
-    // Render User text snippet to chat window
-    viewport.innerHTML += `
-      <div style="background: #3b82f6; color: white; padding: 10px 12px; border-radius: 8px 8px 0px 8px; max-width: 85%; align-self: flex-end; line-height: 1.5; word-break: break-word;">
-          ${userText}
-      </div>
-    `;
-    viewport.scrollTop = viewport.scrollHeight;
-
-    // Render loading text bubble block with dynamic tracking target spans
-    const loadingBubbleId = `ai-loading-${Date.now()}`;
-    viewport.innerHTML += `
-      <div id="${loadingBubbleId}" style="background: #e2e8f0; color: #64748b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; font-style: italic;">
-          <span id="ai-status-text">🤖 Waking up neural processor...</span>
-      </div>
-    `;
-    viewport.scrollTop = viewport.scrollHeight;
-
     try {
-      // Direct local browser LLM inference invocation pipeline
-      // Third parameter passes progress tracking metrics string straight to text viewports
+      isAiResponding = true;
+      
+      // UI Lock down: Disable user inputs while the AI model streams chunks
+      input.disabled = true;
+      const submitBtn = form.querySelector("button[type='submit']");
+      if (submitBtn) submitBtn.disabled = true;
+
+      // 1. RENDER USER MESSAGE BUBBLE (Via high-performance Node construction)
+      const userBubble = document.createElement("div");
+      userBubble.style.cssText = "background: #3b82f6; color: white; padding: 10px 12px; border-radius: 8px 8px 0px 8px; max-width: 85%; align-self: flex-end; line-height: 1.5; word-break: break-word; margin-bottom: 8px;";
+      userBubble.textContent = userText; // Protects completely against XSS script injection
+      viewport.appendChild(userBubble);
+      viewport.scrollTop = viewport.scrollHeight;
+
+      // 2. RENDER LIVE LOADING PROGRESS BUBBLE
+      const loadingBubbleId = `ai-loading-${Date.now()}`;
+      const loadingBubble = document.createElement("div");
+      loadingBubble.id = loadingBubbleId;
+      loadingBubble.style.cssText = "background: #e2e8f0; color: #64748b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; font-style: italic; margin-bottom: 8px;";
+
+      const statusSpan = document.createElement("span");
+      statusSpan.id = `status-text-${loadingBubbleId}`; // Explicit context target keying
+      statusSpan.textContent = "🤖 Waking up neural processor...";
+      
+      loadingBubble.appendChild(statusSpan);
+      viewport.appendChild(loadingBubble);
+      viewport.scrollTop = viewport.scrollHeight;
+
+      // 3. EXECUTE ADVANCED INFERENCE LIFECYCLE
       const aiReply = await getPreBookingAdvice(
         userText,
         "General Campus Inquiry",
         (progressText) => {
-          const statusNode = document.getElementById("ai-status-text");
+          // Look up our targeted scoped sub-element node safely
+          const statusNode = document.getElementById(`status-text-${loadingBubbleId}`);
           if (statusNode) {
-            // Truncate overly long system logs to keep chat bubbles compact
-            statusNode.innerText =
-              progressText.length > 40
-                ? `🤖 ${progressText.substring(0, 37)}...`
-                : `🤖 ${progressText}`;
+            statusNode.textContent = progressText.length > 40
+              ? `🤖 ${progressText.substring(0, 37)}...`
+              : `🤖 ${progressText}`;
           }
         },
       );
 
-      // Extract and strip away loader indicator row
+      // Extract and strip away loader indicator row cleanly
       document.getElementById(loadingBubbleId)?.remove();
 
-      // Render actual processed dynamic LLM reasoning response
-      viewport.innerHTML += `
-        <div style="background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5;">
-            ${aiReply || "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?"}
-        </div>
-      `;
+      // 4. RENDER FINAL PROCESSED REASONING VALUE
+      const aiBubble = document.createElement("div");
+      aiBubble.style.cssText = "background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5; margin-bottom: 8px;";
+      
+      // innerHTML is safe here since the systemInstruction prompt output structure uses markdown formatting tags
+      aiBubble.innerHTML = aiReply || "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?";
+      viewport.appendChild(aiBubble);
+
     } catch (err) {
-      document.getElementById(loadingBubbleId)?.remove();
+      // Emergency teardown layout clear steps on pipeline breaks
+      const activeLoader = viewport.querySelector("[id^='ai-loading-']");
+      if (activeLoader) activeLoader.remove();
+      
       console.error("Local inference execution failed:", err);
-      viewport.innerHTML += `
-        <div style="background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start;">
-            ⚠️ Local AI processing encountered a bump. Ensure your hardware supports WebGPU or try a lighter query string.
-        </div>
-      `;
+      
+      const errorBubble = document.createElement("div");
+      errorBubble.style.cssText = "background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; margin-bottom: 8px;";
+      errorBubble.textContent = "⚠️ Cloud processing encountered a rate-limit layout bump. Please try your request again in a few moments.";
+      viewport.appendChild(errorBubble);
+    } finally {
+      // 🔓 RELEASE THE MUTEX MUTATION LATCH
+      isAiResponding = false;
+      input.disabled = false;
+      
+      const submitBtn = form.querySelector("button[type='submit']");
+      if (submitBtn) submitBtn.disabled = false;
+      
+      viewport.scrollTop = viewport.scrollHeight;
+      input.focus(); // Keep UX snapping clean
     }
-
-    viewport.scrollTop = viewport.scrollHeight;
   };
 }
-function setupStudentListeners(onLogout, session) {
+export function setupStudentListeners(onLogout, session) {
   const content = document.getElementById("dynamic-content");
   const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
   const sidebar = document.getElementById("sidebar");
   const mobileMenuBtn = document.getElementById("mobileMenuBtn");
 
+  // 1. Mobile Hamburger Menu Toggle
   if (mobileMenuBtn && sidebar) {
     mobileMenuBtn.onclick = (e) => {
       e.stopPropagation();
@@ -909,6 +1013,7 @@ function setupStudentListeners(onLogout, session) {
     };
   }
 
+  // 2. Click Outside Mobile Sidebar to Close It
   document.addEventListener("click", (e) => {
     if (
       window.innerWidth <= 768 &&
@@ -920,6 +1025,7 @@ function setupStudentListeners(onLogout, session) {
     }
   });
 
+  // 3. Navigation View Switcher Grid Engine
   navButtons.forEach((btn) => {
     btn.onclick = () => {
       navButtons.forEach((b) => b.classList.remove("active"));
@@ -930,11 +1036,14 @@ function setupStudentListeners(onLogout, session) {
       }
 
       const target = btn.getAttribute("data-target");
+     
 
+      // --- CORE SUB-ROUTING ENGINE ---
       if (target === "dashboard") {
+        // Drop the template string back into the DOM
         content.innerHTML = renderDashboard(session);
-        // ADDED: Make sure cancel triggers exist if they click back to dashboard
         attachCancelListeners();
+        
       } else if (target === "book") {
         content.innerHTML = renderBookingForm(session);
         attachBookingListener(session);
@@ -946,6 +1055,7 @@ function setupStudentListeners(onLogout, session) {
     };
   });
 
+  // 4. Logout Session Termination Flow
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.onclick = onLogout;

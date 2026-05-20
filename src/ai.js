@@ -5,20 +5,40 @@ import { GoogleGenAI } from "@google/genai";
  * Powered by Google Gemini 2.5 Flash
  */
 
-// Initialize the Google Gen AI client with your API key
-// For local testing, paste your API key here. For production deployment,
-// this should be moved behind an environment variable or a serverless function.
-const ai = new GoogleGenAI({
-  apiKey: "AIzaSyCoZVDeXUJDyGe6eeId5zR95g7Pr8cfq0s",
-});
+/**
+ * Helper function to dynamically initialize the Google Gen AI Client
+ * Prevents key leaks on public hosting domains like GitHub Pages.
+ */
+function getGenAIClient() {
+  // 1. Try to read the key from the browser's session storage
+  let apiKey = sessionStorage.getItem("gh_gemini_key");
+
+  // 2. Fallback: If working locally, check if an environment variable exists
+  if (!apiKey && typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
+    apiKey = process.env.GEMINI_API_KEY;
+  } else if (!apiKey && import.meta && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  }
+
+  // 3. Emergency Prompter: If no key is found anywhere, securely prompt the user once
+  if (!apiKey) {
+    apiKey = prompt(
+      "🤖 [Granby Gateway AI Activation]\n\nPlease enter a valid Gemini API Key to initialize the campus chat assistant. This key is stored safely inside your current browser session tab only:"
+    );
+    if (apiKey && apiKey.trim().startsWith("AIzaSy")) {
+      sessionStorage.setItem("gh_gemini_key", apiKey.trim());
+    } else {
+      alert("❌ Invalid or missing API key. The AI module will remain offline.");
+      return null;
+    }
+  }
+
+  // Return a fresh client instance built using the secure key token
+  return new GoogleGenAI({ apiKey });
+}
 
 /**
  * FEATURE 1: Pre-Booking Smart FAQ & Chatbot Assistant (For Students)
- * Converses naturally with students and cross-references their inputs with campus policies.
- * * @param {string} studentNote - The message typed by the student
- * @param {string} selectedCategory - The dashboard view context or selected counseling category
- * @param {function} onProgressUpdate - Optional callback to pass loading text back to the UI
- * @returns {Promise<string>} The markdown-formatted AI response
  */
 export async function getPreBookingAdvice(
   studentNote,
@@ -27,8 +47,13 @@ export async function getPreBookingAdvice(
 ) {
   if (!studentNote || studentNote.trim().length < 2) return null;
 
+  // Initialize the client securely at runtime
+  const aiClient = getGenAIClient();
+  if (!aiClient) {
+    return "⚠️ AI module activation cancelled. Please provide an API key to enable the chatbot assistant.";
+  }
+
   try {
-    // Notify the UI that the API request is initiating
     if (onProgressUpdate) onProgressUpdate("Consulting Granby Database...");
 
     const systemInstruction = `
@@ -55,16 +80,14 @@ export async function getPreBookingAdvice(
   3. If they ask a general question outside of these specific rules/locations, answer it to the best of your ability using your general knowledge, but keep it brief and conversational.
   4. Highlight key rooms, departments, and buildings using bold text (e.g., **Building A**, **Registrar**) so it's easy for students to scan.
   5. Keep your total response friendly, accurate, and limited to a maximum of 3 sentences.
-
     `;
 
-    // Execute content generation via Google's optimized flash model
-    const response = await ai.models.generateContent({
+    const response = await aiClient.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Context: ${selectedCategory}. Question: ${studentNote}`,
       config: {
         systemInstruction,
-        temperature: 0.6, // Balanced for precise guidelines with a natural tone
+        temperature: 0.6,
       },
     });
 
@@ -77,10 +100,6 @@ export async function getPreBookingAdvice(
 
 /**
  * FEATURE 2: Counselor Case History Summarizer Engine (For Guidance Counselors)
- * Analyzes a student's past session records and generates an actionable profile summary.
- * * @param {string} studentName - The full name of the student being reviewed
- * @param {Array} appointmentHistory - Array of past appointment objects fetched from localStorage
- * @returns {Promise<string>} A 3-bullet markdown summary
  */
 export async function generateStudentSummary(
   studentName,
@@ -90,8 +109,13 @@ export async function generateStudentSummary(
     return "💡 <em>This student has no past session records on file. The upcoming appointment will be their initial intake consultation.</em>";
   }
 
+  // Initialize the client securely at runtime
+  const aiClient = getGenAIClient();
+  if (!aiClient) {
+    return "⚠️ Summary engine offline. Valid API credentials are required.";
+  }
+
   try {
-    // Compile array of logs into a single structured text block for the LLM to analyze
     const historyLogs = appointmentHistory
       .map(
         (app) =>
@@ -110,7 +134,7 @@ export async function generateStudentSummary(
       - Bullet 3 (Actionable Tip): One suggested proactive talking point or recommendation for the counselor's upcoming face-to-face dialogue.
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await aiClient.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
     });

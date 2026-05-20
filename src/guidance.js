@@ -1,165 +1,59 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
 import { listenForRealTimeUpdates } from "./syncUtil.js";
+import { createCalendarEvent } from "./calendar.js";
+
+// 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
+import {
+  generateAppointmentsTableHtml,
+  renderConfirmationModal,
+  renderStudentRecords,
+  renderReports,
+  renderGuidanceSettings,
+  renderLogs
+} from "./guidanceView.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
-// --- VIEW COMPONENTS ---
+
+// --- 1. CORE OPERATIONAL DOM RENDERING CONTROL ---
 
 export function renderAppointmentsTable() {
-  const rawAppointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  listenForRealTimeUpdates(() => {
-    const tableContainer = document.getElementById("adminTableContainer");
-    if (tableContainer) {
-      // Re-read local storage, resort, and swap out the HTML content smoothly
-      tableContainer.innerHTML = renderAppointmentsTable();
-      // Re-hook any specific table click actions if necessary
-    }
-  });
-  // FIXED: Implemented clean multi-tier sorting for guidance dashboards
-  const appointments = [...rawAppointments].sort((a, b) => {
-    const statusRank = {
-      pending: 1,
-      approved: 2,
-      rejected: 3,
-      cancelled: 3,
-    };
+  const contentContainer = document.getElementById("admin-dynamic-content");
+  if (contentContainer) {
+    const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+    
+    // 🔥 SOLID SORT: Force "pending" to the absolute top of the list
+    const sorted = [...rawAppointments].sort((a, b) => {
+      const statusA = (a.status || "").toLowerCase().trim();
+      const statusB = (b.status || "").toLowerCase().trim();
 
-    const rankA = statusRank[a.status.toLowerCase()] || 4;
-    const rankB = statusRank[b.status.toLowerCase()] || 4;
+      // If 'a' is pending and 'b' is not, 'a' moves up (comes first)
+      if (statusA === "pending" && statusB !== "pending") return -1;
+      // If 'b' is pending and 'a' is not, 'b' moves up
+      if (statusB === "pending" && statusA !== "pending") return 1;
 
-    if (rankA !== rankB) {
-      return rankA - rankB;
-    }
+      // Secondary sort: If they are both pending (or both processed), sort by date
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
 
-    // Secondary fallback: Sort by date chronological timeline execution order
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
-  });
-
-  return `
-    <div class="table-card">
-        <div class="table-header-main">
-            <h2><i class="material-icons">event_note</i> Appointment Requests</h2>
-            <div class="table-tools">
-                <input type="text" id="tableSearch" placeholder="Search student name...">
-            </div>
-        </div>
-        <div class="table-responsive">
-            <table id="adminTable">
-                <thead>
-                    <tr>
-                        <th>Student</th>
-                        <th>Type</th>
-                        <th>Date & Time</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${
-                      appointments.length > 0
-                        ? appointments
-                            .map((app) => {
-                              const isCancelled = app.status === "cancelled";
-                              const isPending = app.status === "pending";
-
-                              return `
-                        <tr style="${isCancelled ? "opacity: 0.65; background-color: #f8fafc;" : ""}">
-                            <td data-label="Student">
-                                <div class="user-info">
-                                    <span class="user-name">${app.studentName}</span>
-                                    <span class="user-email">${app.studentEmail || "no-email"}</span>
-                                </div>
-                            </td>
-                            <td data-label="Category"><span class="type-tag">${app.type}</span></td>
-                            <td data-label="Schedule">
-                                <div class="date-info">
-                                    <div>${app.date}</div>
-                                    <small>${app.time}</small>
-                                </div>
-                            </td>
-                            <td data-label="Status">
-                                <span class="status-pill ${app.status.toLowerCase()}">${app.status}</span>
-                            </td>
-                            <td data-label="Actions">
-                                <div class="action-btns">
-                                    ${
-                                      isPending
-                                        ? `
-                                        <button class="btn-approve" onclick="openActionModal(${app.id}, 'approved')" title="Approve Request">
-                                            <i class="material-icons">check</i>
-                                        </button>
-                                        <button class="btn-reject" onclick="openActionModal(${app.id}, 'rejected')" title="Reject Request">
-                                            <i class="material-icons">close</i>
-                                        </button>
-                                    `
-                                        : `
-                                        ${
-                                          isCancelled
-                                            ? `
-                                            <span style="color: #64748b; font-size: 0.85rem; font-style: italic; display: inline-flex; align-items: center; gap: 4px;">
-                                                <i class="material-icons" style="font-size: 14px;">remove_circle_outline</i> Cancelled by Student
-                                            </span>
-                                        `
-                                            : `
-                                            <span style="color: #94a3b8; font-size: 0.85rem; font-style: italic;">Processed</span>
-                                        `
-                                        }
-                                    `
-                                    }
-                                </div>
-                            </td>
-                        </tr>`;
-                            })
-                            .join("")
-                        : '<tr><td colspan="5" class="empty-row">No appointment requests found.</td></tr>'
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-  `;
+    contentContainer.innerHTML = generateAppointmentsTableHtml(sorted);
+    setupTableSearch(); 
+  }
 }
-function renderConfirmationModal(id, status) {
-  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const app = apps.find((a) => a.id === id);
-  const isApprove = status === "approved";
 
-  return `
-        <div id="statusModal" class="modal-overlay">
-            <div class="modal-content">
-                <h3>${isApprove ? "Confirm Approval" : "Reason for Rejection"}</h3>
-                <p>Student: <strong>${app.studentName}</strong></p>
-                
-                <div class="modal-body">
-                    ${
-                      isApprove
-                        ? `
-                        <label>Update Schedule (Optional):</label>
-                        <input type="time" id="modalTime" value="${app.time}">
-                        <label>Notes/Instructions for Student:</label>
-                    `
-                        : `
-                        <label>Reason for Rejection (Required):</label>
-                    `
-                    }
-                    <textarea id="modalNotes" placeholder="${isApprove ? "e.g. Please bring your student ID..." : "e.g. Schedule conflict, please choose another date."}"></textarea>
-                </div>
+// --- 2. LIFECYCLE INTERACTION PIPELINES ---
 
-                <div class="modal-actions">
-                    <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-                    <button class="btn-confirm ${status}" onclick="processStatusUpdate(${id}, '${status}')">
-                        Confirm & Send Email
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-}
 window.openActionModal = (id, status) => {
+  const existingModal = document.getElementById("modal-root");
+  if (existingModal) existingModal.remove();
+
+  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const targetApp = apps.find((a) => a.id === id);
+  if (!targetApp) return;
+
   const modalContainer = document.createElement("div");
   modalContainer.id = "modal-root";
-  modalContainer.innerHTML = renderConfirmationModal(id, status);
+  modalContainer.innerHTML = renderConfirmationModal(targetApp, status);
   document.body.appendChild(modalContainer);
 };
 
@@ -170,9 +64,8 @@ window.closeModal = () => {
 
 window.processStatusUpdate = async (id, newStatus) => {
   const notes = document.getElementById("modalNotes").value;
-  const newTime = document.getElementById("modalTime")
-    ? document.getElementById("modalTime").value
-    : null;
+  const timeInput = document.getElementById("modalTime");
+  const newTime = timeInput ? timeInput.value : null;
 
   if (newStatus === "rejected" && !notes.trim()) {
     alert("Please provide a reason for rejection.");
@@ -180,23 +73,34 @@ window.processStatusUpdate = async (id, newStatus) => {
   }
 
   let appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-
-  // Find the specific appointment to get student details (Email, Name, etc.)
   const targetApp = appointments.find((a) => a.id === id);
-
   if (!targetApp) {
     alert("Appointment not found.");
     return;
   }
-  updateSidebarBadges();
-  // Update local data
+  
+  const rawTime = newTime || targetApp.time;
+  let finalTime = rawTime;
+
+  if (rawTime.toLowerCase().includes("am") || rawTime.toLowerCase().includes("pm")) {
+    const [timePart, modifier] = rawTime.split(" ");
+    const timeSegments = timePart.split(":");
+    let hours = timeSegments[0];
+    const minutes = timeSegments[1];
+
+    if (hours === "12") hours = "00";
+    if (modifier.toLowerCase() === "pm") hours = String(parseInt(hours, 10) + 12);
+    
+    finalTime = `${hours.padStart(2, "0")}:${minutes}`;
+  }
+
   appointments = appointments.map((app) => {
     if (app.id === id) {
       return {
         ...app,
         status: newStatus,
         counselorNotes: notes,
-        time: newTime || app.time,
+        time: finalTime,
         updatedAt: new Date().toISOString(),
       };
     }
@@ -205,397 +109,142 @@ window.processStatusUpdate = async (id, newStatus) => {
 
   localStorage.setItem("gh_appointments", JSON.stringify(appointments));
 
-  // EmailJS Integration
+  if (newStatus === "approved") {
+    try {
+      const [hoursStr, minutesStr] = finalTime.split(":");
+      const startHours = parseInt(hoursStr, 10);
+      const minutesVal = parseInt(minutesStr, 10);
+      const [year, month, day] = targetApp.date.split("-").map(num => parseInt(num, 10));
+      
+      const startEventDate = new Date(year, month - 1, day, startHours, minutesVal, 0);
+      const endEventDate = new Date(startEventDate);
+      endEventDate.setHours(startEventDate.getHours() + 1);
+
+      await createCalendarEvent({
+        summary: `Guidance Appointment: ${targetApp.studentName}`,
+        description: `Service Type: ${targetApp.serviceType || "General Consultation"}\nNotes: ${notes || "No additional counselor notes."}`,
+        startTime: startEventDate.toISOString(),
+        endTime: endEventDate.toISOString()
+      });
+    } catch (gcalError) {
+      console.error("⚠️ Automated Google Calendar synchronization stalled:", gcalError);
+    }
+  }
+
   const templateParams = {
     subject_line: `Update: Your Appointment is ${newStatus.toUpperCase()}`,
     to_email: targetApp.studentEmail,
     recipient_name: targetApp.studentName,
     header_title: "Appointment Status Update",
-    main_message: `Your guidance appointment request has been ${newStatus}. Please see the details and counselor notes below.`,
-    app_type: targetApp.serviceType,
+    main_message: `Your guidance appointment request has been ${newStatus}. Please see details below.`,
+    app_type: targetApp.serviceType || targetApp.type,
     app_date: targetApp.date,
-    app_time: newTime || targetApp.time,
+    app_time: rawTime,
     status: newStatus,
     notes: notes || "No additional notes provided.",
   };
 
   try {
-    // Replace 'YOUR_SERVICE_ID' and 'YOUR_TEMPLATE_ID' with your actual EmailJS IDs
     await emailjs.send("service_mtv9cbi", "template_mublumh", templateParams);
   } catch (error) {
     console.error("Failed to send email:", error);
   }
 
   closeModal();
-
-  // Refresh the table UI
-  const content = document.getElementById("admin-dynamic-content");
-  if (content) content.innerHTML = renderAppointmentsTable();
+  renderAppointmentsTable();
+  updateSidebarBadges();
 
   if (window.addNotification) {
-    window.addNotification(
-      `Appointment for ${targetApp.studentName} has been ${newStatus}.`,
-    );
+    window.addNotification(`Appointment for ${targetApp.studentName} has been ${newStatus}.`);
   }
 };
 
-function renderStudentRecords() {
-  // 1. Get all users and filter for students
-  const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const students = allUsers.filter((user) => user.role === "student");
+// --- 3. FILTER & STRUCTURAL NAV HANDLERS ---
 
-  return `
-        <div class="admin-card">
-            <div class="card-header">
-                <h2><i class="material-icons">people</i> Student Directory</h2>
-                <div class="table-tools">
-                    
-                    <input type="text" id="studentSearch" placeholder="Search by name, course, or email...">
-                </div>
-                
-            </div>
-            <div class="table-container">
-                <table id="studentTable">
-                    <thead>
-                        <tr>
-                            <th>Student Name</th>
-                            <th>Year Level</th>
-                            <th>Course & Section</th>
-                            <th>Email Address</th>
-                            <th>Account ID</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${
-                          students.length > 0
-                            ? students
-                                .map(
-                                  (std) => `
-                            <tr>
-                                <td class="user-name">
-                                    <strong>${std.name}</strong>
-                                </td>
-                                <td>
-                                    <span class="level-badge">${std.yearLevel || "N/A"}</span>
-                                </td>
-                                <td>
-                                    <div class="course-info">
-                                        <span class="course-text">${std.course || "N/A"}</span>
-                                        <small class="section-text">${std.section ? `- ${std.section}` : ""}</small>
-                                    </div>
-                                </td>
-                                <td>${std.email}</td>
-                                <td><code class="id-badge">${std.id}</code></td>
-                            </tr>
-                        `,
-                                )
-                                .join("")
-                            : '<tr><td colspan="5" class="empty-row">No registered students found.</td></tr>'
-                        }
-                    </tbody>
-                </table>
-                <button id="printStudentBtn" class="btn-secondary">
-            <i class="material-icons">print</i> Export PDF
-        </button>
-            </div>
-        </div>
-    `;
-}
-function renderReports() {
-  const stats = getAnalytics();
-  const total = stats.totalApps || 1;
-
-  return `
-    <div class="admin-card">
-        <div class="card-header">
-            <h2><i class="material-icons">insights</i> Guidance Intelligence Dashboard</h2>
-            <button id="printAnalyticsBtn" class="btn-primary">
-            <i class="material-icons">download</i> Generate Report
-        </button>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-item">
-                <span class="stat-label">Total Requests</span>
-                <span class="stat-value">${stats.totalApps}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Most Active Year</span>
-                <span class="stat-value warning">${stats.mostActiveYear}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Pending Triage</span>
-                <span class="stat-value info">${stats.pending}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Total Students</span>
-                <span class="stat-value success">${stats.totalStudents}</span>
-            </div>
-        </div>
-
-        <div class="reports-main-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-top: 20px;">
-            
-            <div class="report-section">
-                <h3><i class="material-icons">category</i> Request Type Distribution</h3>
-                <div class="chart-container">
-                    ${renderChartRow("Academic", stats.academic, (stats.academic / total) * 100, "bg-blue")}
-                    ${renderChartRow("Personal", stats.personal, (stats.personal / total) * 100, "bg-red")}
-                    ${renderChartRow("Career", stats.career, (stats.career / total) * 100, "bg-green")}
-                </div>
-            </div>
-
-            <div class="report-section">
-                <h3><i class="material-icons">assignment_turned_in</i> Case Resolution Status</h3>
-                <div class="chart-container">
-                    ${renderChartRow("Approved", stats.statusBreakdown.approved, (stats.statusBreakdown.approved / total) * 100, "bg-green")}
-                    ${renderChartRow("Pending", stats.statusBreakdown.pending, (stats.statusBreakdown.pending / total) * 100, "bg-orange")}
-                    ${renderChartRow("Rejected", stats.statusBreakdown.rejected, (stats.statusBreakdown.rejected / total) * 100, "bg-red")}
-                </div>
-            </div>
-
-            <div class="report-section">
-                <h3><i class="material-icons">leaderboard</i> Volume by Year Level</h3>
-                <div class="chart-container">
-                    ${Object.entries(stats.yearBreakdown)
-                      .map(([year, count]) =>
-                        renderChartRow(
-                          year,
-                          count,
-                          (count / total) * 100,
-                          "bg-purple",
-                        ),
-                      )
-                      .join("")}
-                </div>
-            </div>
-
-            <div class="report-section">
-                <h3><i class="material-icons">school</i> Volume by Course</h3>
-                <div class="chart-container">
-                    ${
-                      Object.keys(stats.courseBreakdown).length > 0
-                        ? Object.entries(stats.courseBreakdown)
-                            .map(([course, count]) =>
-                              renderChartRow(
-                                course,
-                                count,
-                                (count / total) * 100,
-                                "bg-cyan",
-                              ),
-                            )
-                            .join("")
-                        : '<p class="empty-msg">No course data available yet.</p>'
-                    }
-                </div>
-            </div>
-            <div class="report-section">
-    <h3><i class="material-icons">trending_up</i> Demand Pulse (Daily Avg)</h3>
-    <div class="trend-highlight" style="padding: 20px; text-align: center; background: #f8fafc; border-radius: 8px;">
-        <span style="font-size: 2.5rem; font-weight: 800; color: #3b82f6;">${stats.avgDaily}</span>
-        <p style="margin-top: 5px; color: #64748b; font-size: 0.8rem;">Requests per active day</p>
-    </div>
-</div>
-  `;
-}
-
-// Fixed Helper: Corrects the "Full Bar" visual bug
-function renderChartRow(label, count, width, colorClass) {
-  const barWidth = count > 0 ? width : 0;
-  return `
-        <div class="chart-row" style="display: flex; align-items: center; margin-bottom: 12px;">
-            <span style="width: 130px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${label}</span>
-            <div style="flex-grow: 1; height: 10px; background: #f1f5f9; border-radius: 5px; margin: 0 12px; overflow: hidden;">
-                <div class="${colorClass}" style="width: ${barWidth}%; height: 100%; border-radius: 5px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div>
-            </div>
-            <span style="font-weight: bold; width: 25px; text-align: right;">${count}</span>
-        </div>
-    `;
-}
-
-export function renderGuidanceSettings() {
-  const savedEmail =
-    localStorage.getItem("admin_notification_email") ||
-    "jellopancake213@gmail.com";
-
-  return `
-    <div class="glass-card settings-card">
-        <div class="card-header">
-            <h2><i class="material-icons">settings</i> System Settings</h2>
-            <p>Configure notifications and security credentials.</p>
-        </div>
-        
-        <form id="settingsForm" class="settings-form">
-            <div class="form-group">
-                <label for="adminEmail">Notification Recipient Email</label>
-                <input type="email" id="adminEmail" value="${savedEmail}" required>
-            </div>
-            <button type="submit" class="primary-btn">Update Email</button>
-        </form>
-
-        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #e2e8f0;">
-
-        <div class="settings-form">
-            <div class="form-group">
-                <label>Change Administrator Password</label>
-                <div class="input-wrapper password-wrapper">
-                    <input type="password" id="newPassword" placeholder="Enter new password">
-                    <button type="button" class="toggle-password" data-target="newPassword">
-                        <i class="material-icons">visibility</i>
-                    </button>
-                </div>
-            </div>
-
-            <div id="otpContainer" class="form-group hidden" style="margin-top: 15px;">
-                <label for="otpInput">Enter 6-Digit OTP sent to ${savedEmail}</label>
-                <div class="input-wrapper password-wrapper">
-                    <input type="password" id="otpInput" maxlength="6" placeholder="000000" style="letter-spacing: 5px; text-align: center; font-weight: bold;">
-                    <button type="button" class="toggle-password" data-target="otpInput">
-                        <i class="material-icons">visibility</i>
-                    </button>
-                </div>
-                <button type="button" id="verifyOtpBtn" class="primary-btn" style="margin-top: 10px; background: #8b5cf6;">Verify & Save Password</button>
-            </div>
-
-            <div class="settings-actions" id="passActionContainer">
-                <button type="button" id="requestOtpBtn" class="btn-secondary">Request OTP to Change Password</button>
-            </div>
-        </div>
-    </div>
-  `;
-}
-function renderLogs() {
-  // 1. Retrieve all appointment data [cite: 1, 18, 95]
-  const appointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
-
-  // 2. Filter for activities that have been processed (have an updatedAt timestamp)
-  const activities = appointments
-    .filter((app) => app.updatedAt)
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-
-  return `
-    <div class="admin-card">
-        <div class="card-header">
-            <h2><i class="material-icons">history</i> System Activity Logs</h2>
-            <p class="subtitle">Tracking all recent status changes and counselor actions.</p>
-        </div>
-        <div class="log-container">
-            ${
-              activities.length > 0
-                ? activities
-                    .map(
-                      (log) => `
-                <div class="log-entry">
-                    <div class="log-icon ${log.status}">
-                        <i class="material-icons">${log.status === "approved" ? "check_circle" : "cancel"}</i>
-                    </div>
-                    <div class="log-details">
-                        <p><strong>${log.status.toUpperCase()}</strong>: Appointment for <span>${log.studentName}</span></p>
-                        <small>Action taken on: ${new Date(log.updatedAt).toLocaleString()}</small>
-                        ${log.counselorNotes ? `<div class="log-notes">Note: "${log.counselorNotes}"</div>` : ""}
-                    </div>
-                </div>
-            `,
-                    )
-                    .join("")
-                : '<p class="empty-msg">No recent activity found.</p>'
-            }
-        </div>
-    </div>
-  `;
-}
 function setupTableSearch() {
   const searchInput = document.getElementById("tableSearch");
   const table = document.getElementById("adminTable");
+  if (!searchInput || !table) return;
 
-  // Safety check: Exit if elements aren't on the screen yet
-  if (!searchInput || !table) {
-    console.warn(
-      "Search initialization skipped: Elements not found in current view.",
-    );
-    return;
-  }
-
-  // Using .oninput for immediate results as the user types
   searchInput.oninput = () => {
     const filter = searchInput.value.toLowerCase().trim();
     const tbody = table.querySelector("tbody");
-
     if (!tbody) return;
 
     const rows = tbody.querySelectorAll("tr");
-
     rows.forEach((row) => {
-      // 1. Ignore the "No requests found" row if it's visible
-      if (row.classList.contains("empty-row")) return;
-
-      // 2. Capture all text in the row (Student Name, Email, Category, etc.)
+      if (row.classList.contains("empty-row") || row.classList.contains("no-search-results")) return;
       const rowText = row.textContent.toLowerCase();
-
-      // 3. Toggle visibility based on the filter
-      if (rowText.includes(filter)) {
-        row.style.display = ""; // Show row
-        row.style.animation = "fadeIn 0.3s ease"; // Optional: adds a smooth transition
-      } else {
-        row.style.display = "none"; // Hide row
-      }
+      row.style.display = rowText.includes(filter) ? "" : "none";
     });
 
-    // 4. Handle "No Results" state visually (Optional)
-    const visibleRows = Array.from(rows).filter(
-      (r) => r.style.display !== "none",
-    );
+    const visibleRows = Array.from(rows).filter((r) => r.style.display !== "none" && !r.classList.contains("no-search-results"));
     handleNoSearchResults(tbody, visibleRows.length, filter);
   };
 }
 
 function handleNoSearchResults(tbody, visibleCount, filter) {
   let noResultRow = tbody.querySelector(".no-search-results");
-
   if (visibleCount === 0 && filter !== "") {
     if (!noResultRow) {
       noResultRow = document.createElement("tr");
       noResultRow.className = "no-search-results";
       noResultRow.innerHTML = `
-                <td colspan="100%" style="text-align: center; padding: 20px; color: #64748b;">
-                    <i class="material-icons" style="vertical-align: middle;">search_off</i>
-                    No matches found for "${filter}"
-                </td>
-            `;
+        <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+            <i class="material-icons" style="vertical-align: middle;">search_off</i> No matches found for "${filter}"
+        </td>
+      `;
       tbody.appendChild(noResultRow);
     }
   } else if (noResultRow) {
     noResultRow.remove();
   }
 }
+
 export function setupStudentSearch() {
   const searchInput = document.getElementById("studentSearch");
   const table = document.getElementById("studentTable");
-
   if (!searchInput || !table) return;
 
   searchInput.oninput = () => {
     const filter = searchInput.value.toLowerCase().trim();
     const rows = table.querySelectorAll("tbody tr");
-
     rows.forEach((row) => {
-      // Don't filter the "No registered students" row
       if (row.classList.contains("empty-row")) return;
-
-      // row.textContent captures Name, Course, Email, and ID all at once
       const text = row.textContent.toLowerCase();
-
-      if (text.includes(filter)) {
-        row.style.display = "";
-      } else {
-        row.style.display = "none";
-      }
+      row.style.display = text.includes(filter) ? "" : "none";
     });
   };
 }
 
-// --- MAIN RENDERER ---
+// --- 4. MAIN LAYOUT INITIALIZER & ROUTER ---
+
 export function renderGuidanceView(root, session, onLogout) {
+
+// 2. Generate the amber marquee ticker frame if announcements exist
+
+  // Mount the real-time syncing subscription hook exactly ONCE
+  listenForRealTimeUpdates(() => {
+  const activeSection = document.querySelector(".nav-item.active");
+  if (!activeSection) return;
+
+  const currentTab = activeSection.getAttribute("data-target");
+
+  // 1. Prevent table layout thrashing: Only render if the view container is blank
+  if (currentTab === "appointments") {
+    const tableContainer = document.getElementById("admin-dynamic-content");
+    if (tableContainer && !tableContainer.querySelector(".table-rendered-marker")) {
+      tableContainer.innerHTML = `<div class="table-rendered-marker"></div>`;
+      renderAppointmentsTable();
+    }
+  }
+  
+  updateSidebarBadges();
+
+ 
+  
+});
+
   root.innerHTML = `
     <div class="admin-container">
         <aside class="sidebar" id="admin-sidebar">
@@ -653,7 +302,7 @@ export function renderGuidanceView(root, session, onLogout) {
                 </div>
             </nav>
         </aside>
-
+       
         <main class="content-area">
             <header class="view-header">
                 <div class="header-info">
@@ -661,30 +310,31 @@ export function renderGuidanceView(root, session, onLogout) {
                     <span class="status-badge admin-badge">Good day! ${session.name}</span>
                 </div>
                 <div class="header-actions">
-    <div class="notification-wrapper" style="position: relative;">
-        <button class="btn-secondary icon-only" id="notificationBtn" title="Notifications">
-            <i class="material-icons">notifications</i>
-            <span class="notification-badge" id="notifBadge">0</span>
-        </button>
-        <div class="notification-dropdown hidden" id="notificationDropdown">
-            <div class="notif-header">
-                <span>Notifications</span>
-                <button id="clearNotifs">Clear All</button>
-            </div>
-            <div class="notif-body" id="notifBody">
-                <p class="empty-notif">No new notifications</p>
-            </div>
-        </div>
-    </div>
-</div>
+                    <div class="notification-wrapper" style="position: relative;">
+                        <button class="btn-secondary icon-only" id="notificationBtn" title="Notifications">
+                            <i class="material-icons">notifications</i>
+                            <span class="notification-badge" id="notifBadge">0</span>
+                        </button>
+                        <div class="notification-dropdown hidden" id="notificationDropdown">
+                            <div class="notif-header">
+                                <span>Notifications</span>
+                                <button id="clearNotifs">Clear All</button>
+                            </div>
+                            <div class="notif-body" id="notifBody">
+                                <p class="empty-notif">No new notifications</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </header>
 
-            <section id="admin-dynamic-content">
-                ${renderAppointmentsTable()}
-            </section>
+            <section id="admin-dynamic-content"></section>
         </main>
     </div>
   `;
+
+  // 🔥 EXECUTE TARGET SORTED RENDER IMMEDIATELY ON DOM INITIALIZATION
+  renderAppointmentsTable();
 
   setupAdminListeners(onLogout);
   updateSidebarBadges();
@@ -698,14 +348,12 @@ function updateSidebarBadges() {
     badge.style.display = pendingCount > 0 ? "block" : "none";
   }
 }
-// --- EVENT LISTENERS ---
 
 function setupAdminListeners(onLogout) {
   const content = document.getElementById("admin-dynamic-content");
   const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
   const globalSearch = document.getElementById("globalNavSearch");
 
-  // 1. Tab Navigation Logic
   navButtons.forEach((btn) => {
     btn.onclick = () => {
       navButtons.forEach((b) => b.classList.remove("active"));
@@ -713,44 +361,45 @@ function setupAdminListeners(onLogout) {
 
       const target = btn.getAttribute("data-target");
 
+      // --- CORE COUNSELOR NAVIGATION ROUTING SUB-ENGINE ---
       if (target === "appointments") {
-        content.innerHTML = renderAppointmentsTable();
-        setupTableSearch();
+        renderAppointmentsTable();
       } else if (target === "students") {
-        content.innerHTML = renderStudentRecords();
+        const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
+        const students = allUsers.filter((user) => user.role === "student");
+        content.innerHTML = renderStudentRecords(students);
         setupStudentSearch();
       } else if (target === "reports") {
-        content.innerHTML = renderReports();
+        const stats = getAnalytics();
+        content.innerHTML = renderReports(stats);
       } else if (target === "settings") {
-        content.innerHTML = renderGuidanceSettings();
+        const savedEmail = localStorage.getItem("admin_notification_email") || "jellopancake213@gmail.com";
+        content.innerHTML = renderGuidanceSettings(savedEmail);
         attachSettingsListener();
       } else if (target === "logs") {
-        content.innerHTML = renderLogs();
+        const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+        const activities = appointments
+          .filter((app) => app.updatedAt)
+          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        content.innerHTML = renderLogs(activities);
       }
 
       if (globalSearch) globalSearch.value = "";
-
-      const sidebar = document.getElementById("admin-sidebar");
-      if (window.innerWidth <= 768 && sidebar?.classList.contains("active")) {
-        toggleMenu();
-      }
     };
   });
 
-  // 2. Global Search Logic
   if (globalSearch) {
     globalSearch.oninput = (e) => {
       const searchTerm = e.target.value.toLowerCase();
       const rows = document.querySelectorAll("#admin-dynamic-content tbody tr");
       rows.forEach((row) => {
-        if (row.classList.contains("empty-row")) return;
+        if (row.classList.contains("empty-row") || row.classList.contains("no-search-results")) return;
         const text = row.innerText.toLowerCase();
         row.style.display = text.includes(searchTerm) ? "" : "none";
       });
     };
   }
 
-  // 3. Settings Form & OTP Logic
   function attachSettingsListener() {
     const form = document.getElementById("settingsForm");
     if (form) {
@@ -762,7 +411,7 @@ function setupAdminListeners(onLogout) {
         btn.innerText = "Settings Saved!";
         btn.style.background = "#10b981";
         setTimeout(() => {
-          btn.innerText = "Save Configurations";
+          btn.innerText = "Update Email";
           btn.style.background = "";
         }, 2000);
       };
@@ -778,42 +427,24 @@ function setupAdminListeners(onLogout) {
     if (requestBtn) {
       requestBtn.onclick = async () => {
         const newPass = newPassInput.value;
-        if (newPass.length < 8)
-          return alert("Password must be at least 8 characters long.");
-
+        if (newPass.length < 8) return alert("Password must be at least 8 characters long.");
+        
         const session = JSON.parse(localStorage.getItem("gh_user_session"));
-        const savedNotification = localStorage.getItem(
-          "admin_notification_email",
-        );
-        const recipientEmail =
-          savedNotification ||
-          (session ? session.email : "jellopancake213@gmail.com");
-
+        const savedNotification = localStorage.getItem("admin_notification_email");
+        const recipientEmail = savedNotification || (session ? session.email : "jellopancake213@gmail.com");
+        
         generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const now = new Date();
-        const expiryTime = new Date(
-          now.getTime() + 15 * 60000,
-        ).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-        const templateParams = {
-          to_email: recipientEmail,
-          otp_code: generatedOTP,
-          time: expiryTime,
-        };
+        const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         requestBtn.innerText = "Sending OTP...";
         requestBtn.disabled = true;
 
         try {
-          await emailjs.send(
-            "service_mtv9cbi",
-            "template_gbmoria",
-            templateParams,
-          );
+          await emailjs.send("service_mtv9cbi", "template_gbmoria", {
+            to_email: recipientEmail,
+            otp_code: generatedOTP,
+            time: expiryTime,
+          });
           alert(`OTP Sent to ${recipientEmail}`);
           otpContainer.classList.remove("hidden");
           requestBtn.classList.add("hidden");
@@ -856,10 +487,7 @@ function setupAdminListeners(onLogout) {
       };
     }
 
-    const toggleButtons = document.querySelectorAll(
-      ".settings-card .toggle-password",
-    );
-    toggleButtons.forEach((btn) => {
+    document.querySelectorAll(".settings-card .toggle-password").forEach((btn) => {
       btn.onclick = () => {
         const targetId = btn.getAttribute("data-target");
         const input = document.getElementById(targetId);
@@ -875,15 +503,14 @@ function setupAdminListeners(onLogout) {
     });
   }
 
-  // 4. Notification System Logic
+  // Notification Core DOM Actions
   const notifBtn = document.getElementById("notificationBtn");
   const notifDropdown = document.getElementById("notificationDropdown");
   const notifBadge = document.getElementById("notifBadge");
   const notifBody = document.getElementById("notifBody");
   const clearNotifs = document.getElementById("clearNotifs");
-  const appointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const pendingApps = appointments.filter((app) => app.status === "pending");
+  const appointmentsData = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const pendingApps = appointmentsData.filter((app) => app.status === "pending");
 
   if (notifBtn) {
     notifBtn.onclick = (e) => {
@@ -896,7 +523,6 @@ function setupAdminListeners(onLogout) {
     };
   }
 
-  // Close notification when clicking outside
   document.addEventListener("click", (e) => {
     if (notifDropdown && !notifDropdown.contains(e.target)) {
       notifDropdown.classList.add("hidden");
@@ -909,74 +535,58 @@ function setupAdminListeners(onLogout) {
     };
   }
 
-  // Global helper to add a notification from anywhere
   window.addNotification = (message) => {
+    if (!notifBody) return;
     const emptyMsg = notifBody.querySelector(".empty-notif");
     if (emptyMsg) emptyMsg.remove();
 
     const notifItem = document.createElement("div");
     notifItem.className = "notif-item";
-    notifItem.innerHTML = `
-            <p>${message}</p>
-            <small>${new Date().toLocaleTimeString()}</small>
-        `;
+    notifItem.innerHTML = `<p>${message}</p><small>${new Date().toLocaleTimeString()}</small>`;
     notifBody.prepend(notifItem);
 
     const currentCount = parseInt(notifBadge.innerText || 0, 10);
     notifBadge.innerText = currentCount + 1;
     notifBadge.style.display = "block";
   };
-  if (pendingApps.length > 0) {
-    window.addNotification(
-      `You have ${pendingApps.length} pending appointment(s) to review.`,
-    );
+
+  if (pendingApps.length > 0 && !sessionStorage.getItem("notified_pending")) {
+    window.addNotification(`You have ${pendingApps.length} pending appointment(s) to review.`);
+    sessionStorage.setItem("notified_pending", "true");
   }
 
-  // 5. Global Action Listeners
-  content.addEventListener("click", (e) => {
+  content.onclick = (e) => {
     if (e.target.closest("#printStudentBtn")) printReport("students");
     if (e.target.closest("#printAnalyticsBtn")) printReport("analytics");
-  });
+  };
 
   const logoutBtn = document.getElementById("adminLogoutBtn");
   if (logoutBtn) logoutBtn.onclick = onLogout;
 }
+
+// --- 5. DATA ANALYTICS & EXPORTS ---
+
 function getAnalytics() {
   const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
   const users = JSON.parse(localStorage.getItem("gh_users")) || [];
 
-  // Updated yearBreakdown to include Irregular status
-  const yearBreakdown = {
-    "1st Year": 0,
-    "2nd Year": 0,
-    "3rd Year": 0,
-    "4th Year": 0,
-    Irregular: 0,
-  };
+  const yearBreakdown = { "1st Year": 0, "2nd Year": 0, "3rd Year": 0, "4th Year": 0, Irregular: 0 };
   const courseBreakdown = {};
-  const statusBreakdown = { pending: 0, approved: 0, rejected: 0 };
-
+  const statusBreakdown = { pending: 0, approved: 0, rejected: 0, cancelled: 0 };
   const dailyTrends = {};
-  const reasonFrequency = {};
 
   apps.forEach((app) => {
-    // 1. Status Tracking
-    if (statusBreakdown[app.status] !== undefined)
-      statusBreakdown[app.status]++;
+    const statusKey = app.status?.toLowerCase();
+    if (statusBreakdown[statusKey] !== undefined) statusBreakdown[statusKey]++;
 
-    // 2. Daily Volume Trend
     const date = new Date(app.createdAt || Date.now()).toLocaleDateString();
     dailyTrends[date] = (dailyTrends[date] || 0) + 1;
 
-    // 4. Demographic cross-referencing
     const student = users.find((u) => u.email === app.studentEmail);
     if (student) {
-      if (student.yearLevel && yearBreakdown[student.yearLevel] !== undefined) {
-        yearBreakdown[student.yearLevel]++;
-      }
+      if (student.yearLevel && yearBreakdown[student.yearLevel] !== undefined) yearBreakdown[student.yearLevel]++;
       if (student.course) {
-        courseBreakdown[student.course] =
-          (courseBreakdown[student.course] || 0) + 1;
+        courseBreakdown[student.course] = (courseBreakdown[student.course] || 0) + 1;
       }
     }
   });
@@ -984,63 +594,19 @@ function getAnalytics() {
   const dates = Object.keys(dailyTrends);
   const avgDaily = dates.length ? (apps.length / dates.length).toFixed(1) : 0;
 
-  // Notification Logic
-  const notifBtn = document.getElementById("notificationBtn");
-  const notifDropdown = document.getElementById("notificationDropdown");
-  const notifBadge = document.getElementById("notifBadge");
-  const notifBody = document.getElementById("notifBody");
-
-  if (notifBtn) {
-    notifBtn.onclick = (e) => {
-      e.stopPropagation();
-      notifDropdown.classList.toggle("hidden");
-      // Reset badge when opened
-      notifBadge.style.display = "none";
-    };
-  }
-
-  // Close dropdown when clicking outside
-  document.addEventListener("click", () => {
-    if (notifDropdown) notifDropdown.classList.add("hidden");
-  });
-
-  // Function to add a notification (call this whenever an action happens)
-  window.addNotification = (message) => {
-    const emptyMsg = notifBody.querySelector(".empty-notif");
-    if (emptyMsg) emptyMsg.remove();
-
-    const notifItem = document.createElement("div");
-    notifItem.className = "notif-item";
-    notifItem.innerHTML = `
-        <p>${message}</p>
-        <small>${new Date().toLocaleTimeString()}</small>
-    `;
-    notifBody.prepend(notifItem);
-
-    notifBadge.innerText = parseInt(notifBadge.innerText || 0, 10) + 1;
-    notifBadge.style.display = "block";
-  };
-
   return {
     totalApps: apps.length,
     approved: statusBreakdown.approved,
     pending: statusBreakdown.pending,
     totalStudents: users.filter((u) => u.role === "student").length,
-    // Safely handling type checks with optional chaining
-    academic: apps.filter((a) => a.type?.toLowerCase().includes("academic"))
-      .length,
-    personal: apps.filter((a) => a.type?.toLowerCase().includes("personal"))
-      .length,
+    academic: apps.filter((a) => a.type?.toLowerCase().includes("academic")).length,
+    personal: apps.filter((a) => a.type?.toLowerCase().includes("personal")).length,
     career: apps.filter((a) => a.type?.toLowerCase().includes("career")).length,
     yearBreakdown,
     courseBreakdown,
     statusBreakdown,
-    reasonFrequency,
     avgDaily,
-    mostActiveYear: Object.keys(yearBreakdown).reduce(
-      (a, b) => (yearBreakdown[a] > yearBreakdown[b] ? a : b),
-      "N/A",
-    ),
+    mostActiveYear: Object.keys(yearBreakdown).reduce((a, b) => (yearBreakdown[a] > yearBreakdown[b] ? a : b), "N/A"),
   };
 }
 
@@ -1050,41 +616,20 @@ export function printReport(type) {
   const students = allUsers.filter((user) => user.role === "student");
 
   let printContent = "";
-
   if (type === "analytics") {
     printContent = `
       <h1>Guidance Intelligence Report</h1>
       <p>Generated on: ${new Date().toLocaleString()}</p>
-      
       <h3>Summary Statistics</h3>
       <table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
         <thead>
-          <tr style="background: #f1f5f9;">
-            <th>Metric</th>
-            <th>Value</th>
-          </tr>
+          <tr style="background: #f1f5f9;"><th>Metric</th><th>Value</th></tr>
         </thead>
         <tbody>
           <tr><td>Total Requests</td><td>${stats.totalApps}</td></tr>
           <tr><td>Most Active Year</td><td>${stats.mostActiveYear}</td></tr>
           <tr><td>Total Students</td><td>${stats.totalStudents}</td></tr>
           <tr><td>Daily Average</td><td>${stats.avgDaily}</td></tr>
-        </tbody>
-      </table>
-
-      <h3>Volume by Category</h3>
-      <table border="1" style="width:100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background: #f1f5f9;">
-            <th>Category</th>
-            <th>Count</th>
-            <th>Percentage</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Academic</td><td>${stats.academic}</td><td>${((stats.academic / stats.totalApps) * 100).toFixed(1)}%</td></tr>
-          <tr><td>Personal</td><td>${stats.personal}</td><td>${((stats.personal / stats.totalApps) * 100).toFixed(1)}%</td></tr>
-          <tr><td>Career</td><td>${stats.career}</td><td>${((stats.career / stats.totalApps) * 100).toFixed(1)}%</td></tr>
         </tbody>
       </table>
     `;
@@ -1095,27 +640,11 @@ export function printReport(type) {
       <table border="1" style="width:100%; border-collapse: collapse;">
         <thead>
           <tr style="background: #f1f5f9;">
-            <th>Student Name</th>
-            <th>Year Level</th>
-            <th>Course</th>
-            <th>Email</th>
-            <th>ID</th>
+            <th>Student Name</th><th>Year Level</th><th>Course</th><th>Email</th><th>ID</th>
           </tr>
         </thead>
         <tbody>
-          ${students
-            .map(
-              (std) => `
-            <tr>
-              <td>${std.name}</td>
-              <td>${std.yearLevel || "N/A"}</td>
-              <td>${std.course || "N/A"}</td>
-              <td>${std.email}</td>
-              <td>${std.id}</td>
-            </tr>
-          `,
-            )
-            .join("")}
+          ${students.map((std) => `<tr><td>${std.name}</td><td>${std.yearLevel || "N/A"}</td><td>${std.course || "N/A"}</td><td>${std.email}</td><td>${std.id}</td></tr>`).join("")}
         </tbody>
       </table>
     `;
@@ -1128,10 +657,9 @@ export function printReport(type) {
         <title>Export - Granby Gateway</title>
         <style>
           body { font-family: sans-serif; padding: 20px; }
-          table { margin-top: 10px; }
-          th, td { padding: 8px; text-align: left; }
+          table { margin-top: 10px; width:100%; border-collapse:collapse; }
+          th, td { padding: 8px; text-align: left; border: 1px solid #cbd5e1; }
           h1 { color: #1e293b; }
-          @media print { .no-print { display: none; } }
         </style>
       </head>
       <body>${printContent}</body>
