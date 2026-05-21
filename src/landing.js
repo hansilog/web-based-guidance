@@ -1,12 +1,12 @@
 import "./styles/landing.css";
 
-export function renderLandingPage(root, onGetStarted) {
+export function renderLandingPage(root, onGetStarted, onLogin) {
   root.innerHTML = `
         <div class="landing-page">
             <nav class="glass-nav">
                 <div class="logo">
                     <i class="material-icons">gavel</i>
-                    <span>Granby Gateway</span>
+                    <span>Granby Colleges of Science and Technology</span>
                 </div>
                 <button class="nav-login" id="navLoginBtn">Sign In</button>
             </nav>
@@ -84,9 +84,9 @@ export function renderLandingPage(root, onGetStarted) {
         </div>
     `;
 
-  // Listeners
-  document.getElementById("getStartedBtn").onclick = onGetStarted;
-  document.getElementById("navLoginBtn").onclick = onGetStarted;
+    // Listeners
+    document.getElementById("getStartedBtn").onclick = onGetStarted;
+    document.getElementById("navLoginBtn").onclick = onLogin;
 
   // View Services Smooth Scroll
   document.getElementById("viewServicesBtn").onclick = () => {

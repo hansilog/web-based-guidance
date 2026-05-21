@@ -8,9 +8,8 @@ import {
   generateAppointmentsTableHtml,
   renderConfirmationModal,
   renderStudentRecords,
-  renderReports,
   renderGuidanceSettings,
-  renderLogs
+  renderLogs,
 } from "./guidanceView.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
@@ -20,8 +19,9 @@ emailjs.init("6_rFpZEVOh3AVEsIM");
 export function renderAppointmentsTable() {
   const contentContainer = document.getElementById("admin-dynamic-content");
   if (contentContainer) {
-    const rawAppointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    
+    const rawAppointments =
+      JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
     // 🔥 SOLID SORT: Force "pending" to the absolute top of the list
     const sorted = [...rawAppointments].sort((a, b) => {
       const statusA = (a.status || "").toLowerCase().trim();
@@ -37,7 +37,7 @@ export function renderAppointmentsTable() {
     });
 
     contentContainer.innerHTML = generateAppointmentsTableHtml(sorted);
-    setupTableSearch(); 
+    setupTableSearch();
   }
 }
 
@@ -78,19 +78,23 @@ window.processStatusUpdate = async (id, newStatus) => {
     alert("Appointment not found.");
     return;
   }
-  
+
   const rawTime = newTime || targetApp.time;
   let finalTime = rawTime;
 
-  if (rawTime.toLowerCase().includes("am") || rawTime.toLowerCase().includes("pm")) {
+  if (
+    rawTime.toLowerCase().includes("am") ||
+    rawTime.toLowerCase().includes("pm")
+  ) {
     const [timePart, modifier] = rawTime.split(" ");
     const timeSegments = timePart.split(":");
     let hours = timeSegments[0];
     const minutes = timeSegments[1];
 
     if (hours === "12") hours = "00";
-    if (modifier.toLowerCase() === "pm") hours = String(parseInt(hours, 10) + 12);
-    
+    if (modifier.toLowerCase() === "pm")
+      hours = String(parseInt(hours, 10) + 12);
+
     finalTime = `${hours.padStart(2, "0")}:${minutes}`;
   }
 
@@ -114,9 +118,18 @@ window.processStatusUpdate = async (id, newStatus) => {
       const [hoursStr, minutesStr] = finalTime.split(":");
       const startHours = parseInt(hoursStr, 10);
       const minutesVal = parseInt(minutesStr, 10);
-      const [year, month, day] = targetApp.date.split("-").map(num => parseInt(num, 10));
-      
-      const startEventDate = new Date(year, month - 1, day, startHours, minutesVal, 0);
+      const [year, month, day] = targetApp.date
+        .split("-")
+        .map((num) => parseInt(num, 10));
+
+      const startEventDate = new Date(
+        year,
+        month - 1,
+        day,
+        startHours,
+        minutesVal,
+        0,
+      );
       const endEventDate = new Date(startEventDate);
       endEventDate.setHours(startEventDate.getHours() + 1);
 
@@ -124,10 +137,13 @@ window.processStatusUpdate = async (id, newStatus) => {
         summary: `Guidance Appointment: ${targetApp.studentName}`,
         description: `Service Type: ${targetApp.serviceType || "General Consultation"}\nNotes: ${notes || "No additional counselor notes."}`,
         startTime: startEventDate.toISOString(),
-        endTime: endEventDate.toISOString()
+        endTime: endEventDate.toISOString(),
       });
     } catch (gcalError) {
-      console.error("⚠️ Automated Google Calendar synchronization stalled:", gcalError);
+      console.error(
+        "⚠️ Automated Google Calendar synchronization stalled:",
+        gcalError,
+      );
     }
   }
 
@@ -155,7 +171,9 @@ window.processStatusUpdate = async (id, newStatus) => {
   updateSidebarBadges();
 
   if (window.addNotification) {
-    window.addNotification(`Appointment for ${targetApp.studentName} has been ${newStatus}.`);
+    window.addNotification(
+      `Appointment for ${targetApp.studentName} has been ${newStatus}.`,
+    );
   }
 };
 
@@ -173,12 +191,20 @@ function setupTableSearch() {
 
     const rows = tbody.querySelectorAll("tr");
     rows.forEach((row) => {
-      if (row.classList.contains("empty-row") || row.classList.contains("no-search-results")) return;
+      if (
+        row.classList.contains("empty-row") ||
+        row.classList.contains("no-search-results")
+      )
+        return;
       const rowText = row.textContent.toLowerCase();
       row.style.display = rowText.includes(filter) ? "" : "none";
     });
 
-    const visibleRows = Array.from(rows).filter((r) => r.style.display !== "none" && !r.classList.contains("no-search-results"));
+    const visibleRows = Array.from(rows).filter(
+      (r) =>
+        r.style.display !== "none" &&
+        !r.classList.contains("no-search-results"),
+    );
     handleNoSearchResults(tbody, visibleRows.length, filter);
   };
 }
@@ -220,30 +246,29 @@ export function setupStudentSearch() {
 // --- 4. MAIN LAYOUT INITIALIZER & ROUTER ---
 
 export function renderGuidanceView(root, session, onLogout) {
-
-// 2. Generate the amber marquee ticker frame if announcements exist
+  // 2. Generate the amber marquee ticker frame if announcements exist
 
   // Mount the real-time syncing subscription hook exactly ONCE
   listenForRealTimeUpdates(() => {
-  const activeSection = document.querySelector(".nav-item.active");
-  if (!activeSection) return;
+    const activeSection = document.querySelector(".nav-item.active");
+    if (!activeSection) return;
 
-  const currentTab = activeSection.getAttribute("data-target");
+    const currentTab = activeSection.getAttribute("data-target");
 
-  // 1. Prevent table layout thrashing: Only render if the view container is blank
-  if (currentTab === "appointments") {
-    const tableContainer = document.getElementById("admin-dynamic-content");
-    if (tableContainer && !tableContainer.querySelector(".table-rendered-marker")) {
-      tableContainer.innerHTML = `<div class="table-rendered-marker"></div>`;
-      renderAppointmentsTable();
+    // 1. Prevent table layout thrashing: Only render if the view container is blank
+    if (currentTab === "appointments") {
+      const tableContainer = document.getElementById("admin-dynamic-content");
+      if (
+        tableContainer &&
+        !tableContainer.querySelector(".table-rendered-marker")
+      ) {
+        tableContainer.innerHTML = `<div class="table-rendered-marker"></div>`;
+        renderAppointmentsTable();
+      }
     }
-  }
-  
-  updateSidebarBadges();
 
- 
-  
-});
+    updateSidebarBadges();
+  });
 
   root.innerHTML = `
     <div class="admin-container">
@@ -277,11 +302,6 @@ export function renderGuidanceView(root, session, onLogout) {
                         <span>Student Records</span>
                     </button>
 
-                    <div class="nav-label">Analysis & Reports</div>
-                    <button class="nav-item" data-target="reports">
-                        <i class="material-icons">bar_chart</i> 
-                        <span>Analytics Dashboard</span>
-                    </button>
                     <button class="nav-item" data-target="logs">
                         <i class="material-icons">history</i> 
                         <span>Activity Logs</span>
@@ -369,15 +389,16 @@ function setupAdminListeners(onLogout) {
         const students = allUsers.filter((user) => user.role === "student");
         content.innerHTML = renderStudentRecords(students);
         setupStudentSearch();
-      } else if (target === "reports") {
-        const stats = getAnalytics();
-        content.innerHTML = renderReports(stats);
-      } else if (target === "settings") {
-        const savedEmail = localStorage.getItem("admin_notification_email") || "jellopancake213@gmail.com";
+      } 
+      else if (target === "settings") {
+        const savedEmail =
+          localStorage.getItem("admin_notification_email") ||
+          "jellopancake213@gmail.com";
         content.innerHTML = renderGuidanceSettings(savedEmail);
         attachSettingsListener();
       } else if (target === "logs") {
-        const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+        const appointments =
+          JSON.parse(localStorage.getItem("gh_appointments")) || [];
         const activities = appointments
           .filter((app) => app.updatedAt)
           .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -393,7 +414,11 @@ function setupAdminListeners(onLogout) {
       const searchTerm = e.target.value.toLowerCase();
       const rows = document.querySelectorAll("#admin-dynamic-content tbody tr");
       rows.forEach((row) => {
-        if (row.classList.contains("empty-row") || row.classList.contains("no-search-results")) return;
+        if (
+          row.classList.contains("empty-row") ||
+          row.classList.contains("no-search-results")
+        )
+          return;
         const text = row.innerText.toLowerCase();
         row.style.display = text.includes(searchTerm) ? "" : "none";
       });
@@ -427,14 +452,22 @@ function setupAdminListeners(onLogout) {
     if (requestBtn) {
       requestBtn.onclick = async () => {
         const newPass = newPassInput.value;
-        if (newPass.length < 8) return alert("Password must be at least 8 characters long.");
-        
+        if (newPass.length < 8)
+          return alert("Password must be at least 8 characters long.");
+
         const session = JSON.parse(localStorage.getItem("gh_user_session"));
-        const savedNotification = localStorage.getItem("admin_notification_email");
-        const recipientEmail = savedNotification || (session ? session.email : "jellopancake213@gmail.com");
-        
+        const savedNotification = localStorage.getItem(
+          "admin_notification_email",
+        );
+        const recipientEmail =
+          savedNotification ||
+          (session ? session.email : "jellopancake213@gmail.com");
+
         generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString(
+          [],
+          { hour: "2-digit", minute: "2-digit" },
+        );
 
         requestBtn.innerText = "Sending OTP...";
         requestBtn.disabled = true;
@@ -487,20 +520,22 @@ function setupAdminListeners(onLogout) {
       };
     }
 
-    document.querySelectorAll(".settings-card .toggle-password").forEach((btn) => {
-      btn.onclick = () => {
-        const targetId = btn.getAttribute("data-target");
-        const input = document.getElementById(targetId);
-        const icon = btn.querySelector("i");
-        if (input.type === "password") {
-          input.type = "text";
-          icon.innerText = "visibility_off";
-        } else {
-          input.type = "password";
-          icon.innerText = "visibility";
-        }
-      };
-    });
+    document
+      .querySelectorAll(".settings-card .toggle-password")
+      .forEach((btn) => {
+        btn.onclick = () => {
+          const targetId = btn.getAttribute("data-target");
+          const input = document.getElementById(targetId);
+          const icon = btn.querySelector("i");
+          if (input.type === "password") {
+            input.type = "text";
+            icon.innerText = "visibility_off";
+          } else {
+            input.type = "password";
+            icon.innerText = "visibility";
+          }
+        };
+      });
   }
 
   // Notification Core DOM Actions
@@ -509,8 +544,11 @@ function setupAdminListeners(onLogout) {
   const notifBadge = document.getElementById("notifBadge");
   const notifBody = document.getElementById("notifBody");
   const clearNotifs = document.getElementById("clearNotifs");
-  const appointmentsData = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const pendingApps = appointmentsData.filter((app) => app.status === "pending");
+  const appointmentsData =
+    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const pendingApps = appointmentsData.filter(
+    (app) => app.status === "pending",
+  );
 
   if (notifBtn) {
     notifBtn.onclick = (e) => {
@@ -551,7 +589,9 @@ function setupAdminListeners(onLogout) {
   };
 
   if (pendingApps.length > 0 && !sessionStorage.getItem("notified_pending")) {
-    window.addNotification(`You have ${pendingApps.length} pending appointment(s) to review.`);
+    window.addNotification(
+      `You have ${pendingApps.length} pending appointment(s) to review.`,
+    );
     sessionStorage.setItem("notified_pending", "true");
   }
 
@@ -566,74 +606,13 @@ function setupAdminListeners(onLogout) {
 
 // --- 5. DATA ANALYTICS & EXPORTS ---
 
-function getAnalytics() {
-  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-
-  const yearBreakdown = { "1st Year": 0, "2nd Year": 0, "3rd Year": 0, "4th Year": 0, Irregular: 0 };
-  const courseBreakdown = {};
-  const statusBreakdown = { pending: 0, approved: 0, rejected: 0, cancelled: 0 };
-  const dailyTrends = {};
-
-  apps.forEach((app) => {
-    const statusKey = app.status?.toLowerCase();
-    if (statusBreakdown[statusKey] !== undefined) statusBreakdown[statusKey]++;
-
-    const date = new Date(app.createdAt || Date.now()).toLocaleDateString();
-    dailyTrends[date] = (dailyTrends[date] || 0) + 1;
-
-    const student = users.find((u) => u.email === app.studentEmail);
-    if (student) {
-      if (student.yearLevel && yearBreakdown[student.yearLevel] !== undefined) yearBreakdown[student.yearLevel]++;
-      if (student.course) {
-        courseBreakdown[student.course] = (courseBreakdown[student.course] || 0) + 1;
-      }
-    }
-  });
-
-  const dates = Object.keys(dailyTrends);
-  const avgDaily = dates.length ? (apps.length / dates.length).toFixed(1) : 0;
-
-  return {
-    totalApps: apps.length,
-    approved: statusBreakdown.approved,
-    pending: statusBreakdown.pending,
-    totalStudents: users.filter((u) => u.role === "student").length,
-    academic: apps.filter((a) => a.type?.toLowerCase().includes("academic")).length,
-    personal: apps.filter((a) => a.type?.toLowerCase().includes("personal")).length,
-    career: apps.filter((a) => a.type?.toLowerCase().includes("career")).length,
-    yearBreakdown,
-    courseBreakdown,
-    statusBreakdown,
-    avgDaily,
-    mostActiveYear: Object.keys(yearBreakdown).reduce((a, b) => (yearBreakdown[a] > yearBreakdown[b] ? a : b), "N/A"),
-  };
-}
-
 export function printReport(type) {
-  const stats = getAnalytics();
   const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
   const students = allUsers.filter((user) => user.role === "student");
 
   let printContent = "";
-  if (type === "analytics") {
-    printContent = `
-      <h1>Guidance Intelligence Report</h1>
-      <p>Generated on: ${new Date().toLocaleString()}</p>
-      <h3>Summary Statistics</h3>
-      <table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 20px;">
-        <thead>
-          <tr style="background: #f1f5f9;"><th>Metric</th><th>Value</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Total Requests</td><td>${stats.totalApps}</td></tr>
-          <tr><td>Most Active Year</td><td>${stats.mostActiveYear}</td></tr>
-          <tr><td>Total Students</td><td>${stats.totalStudents}</td></tr>
-          <tr><td>Daily Average</td><td>${stats.avgDaily}</td></tr>
-        </tbody>
-      </table>
-    `;
-  } else if (type === "students") {
+  
+  if (type === "students") {
     printContent = `
       <h1>Student Directory Export</h1>
       <p>Total Registered Students: ${students.length}</p>
@@ -672,3 +651,5 @@ export function printReport(type) {
     win.close();
   }, 500);
 }
+
+// Add this to adminjs.txt

@@ -5,10 +5,6 @@ import { renderGuidanceView } from "./guidance.js";
 import { renderLandingPage } from "./landing.js";
 import { renderAdminView } from "./admin.js";
 import { initGoogleAuth } from "./calendar.js";
-
-// Simply import the student file here so the browser compiles it 
-// and loads window.handleStudentInlineSync into memory right away!
-import "./student.js"; 
 import "./styles/styles.css";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
@@ -171,6 +167,7 @@ async function handleLogin(identifier, p, showError) {
   if (found) {
     const { pass, ...sessionData } = found;
     sessionStorage.setItem("gh_session", JSON.stringify(sessionData));
+    window.logActivity(sessionData, "Logged in");
     initApp();
   } else {
     showError("Invalid username/email or password.");
@@ -220,25 +217,35 @@ async function handleRegister(
 // --- ROUTER ---
 function initApp() {
   const root = document.getElementById("app");
-  const session = JSON.parse(sessionStorage.getItem("gh_session"));
+  const sessionData = sessionStorage.getItem("gh_session");
+  const session = sessionData ? JSON.parse(sessionData) : null;
   const hasEntered = sessionStorage.getItem("gh_entered");
 
-  if (!session && !hasEntered) {
-    renderLandingPage(root, () => {
-      sessionStorage.setItem("gh_entered", "true");
-      initApp();
-    });
-  } else if (!session) {
-    renderLoginPage(root, handleLogin, handleRegister);
-  } else if (session.role === "admin") {
-    renderAdminView(root, session, handleLogout);
-  } else if (session.role === "guidance") {
-    renderGuidanceView(root, session, handleLogout);
-  } else {
-    renderStudentView(root, session, handleLogout);
+  // 1. If we have a session, show the appropriate view
+  if (session) {
+    if (session.role === "admin") return renderAdminView(root, session, handleLogout);
+    if (session.role === "guidance") return renderGuidanceView(root, session, handleLogout);
+    return renderStudentView(root, session, handleLogout);
   }
-}
 
+  // 2. If no session, check if they have "Entered" (clicked Get Started or Sign In)
+  if (hasEntered) {
+    // We pass handleLogin and handleRegister from your entry file scope
+    return renderLoginPage(root, handleLogin, handleRegister);
+  }
+
+  // 3. Otherwise, show the landing page
+  renderLandingPage(root, 
+    () => { // "Get Started"
+      sessionStorage.setItem("gh_entered", "true");
+      renderLoginPage(root, handleLogin, handleRegister, true); 
+    },
+    () => { // "Sign In"
+      sessionStorage.setItem("gh_entered", "true");
+      renderLoginPage(root, handleLogin, handleRegister, false); 
+    }
+  );
+}
 // System Startup Lifecycle wrapper
 const initializeSystemSequence = async () => {
   await seedUsers();

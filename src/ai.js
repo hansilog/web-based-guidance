@@ -14,21 +14,33 @@ function getGenAIClient() {
   let apiKey = sessionStorage.getItem("gh_gemini_key");
 
   // 2. Fallback: If working locally, check if an environment variable exists
-  if (!apiKey && typeof process !== "undefined" && process.env && process.env.GEMINI_API_KEY) {
+  if (
+    !apiKey &&
+    typeof process !== "undefined" &&
+    process.env &&
+    process.env.GEMINI_API_KEY
+  ) {
     apiKey = process.env.GEMINI_API_KEY;
-  } else if (!apiKey && import.meta && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
+  } else if (
+    !apiKey &&
+    import.meta &&
+    import.meta.env &&
+    import.meta.env.VITE_GEMINI_API_KEY
+  ) {
     apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   }
 
   // 3. Emergency Prompter: If no key is found anywhere, securely prompt the user once
   if (!apiKey) {
     apiKey = prompt(
-      "🤖 [Granby Gateway AI Activation]\n\nPlease enter a valid Gemini API Key to initialize the campus chat assistant. This key is stored safely inside your current browser session tab only:"
+      "🤖 [Granby Gateway AI Activation]\n\nPlease enter a valid Gemini API Key to initialize the campus chat assistant. This key is stored safely inside your current browser session tab only:",
     );
     if (apiKey && apiKey.trim().startsWith("AIzaSy")) {
       sessionStorage.setItem("gh_gemini_key", apiKey.trim());
     } else {
-      alert("❌ Invalid or missing API key. The AI module will remain offline.");
+      alert(
+        "❌ Invalid or missing API key. The AI module will remain offline.",
+      );
       return null;
     }
   }

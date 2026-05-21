@@ -8,9 +8,10 @@ import {
   getDate,
   isSameDay,
 } from "date-fns";
-import { listenForRealTimeUpdates } from "./syncUtil.js";
+import { listenForRealTimeUpdates, renderBroadcastBanner } from "./syncUtil.js";
 import { getPreBookingAdvice } from "./ai.js";
 import { createCalendarEvent } from "./calendar.js";
+
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -20,7 +21,9 @@ export function renderRightSidebar(myApps) {
 
   // 1. Get the single next approved appointment
   const nextApp = myApps
-    .filter((a) => a.status.toLowerCase() === "approved" && new Date(a.date) >= now)
+    .filter(
+      (a) => a.status.toLowerCase() === "approved" && new Date(a.date) >= now,
+    )
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
   // 2. Build the Calendar HTML Grid Layout
@@ -33,8 +36,12 @@ export function renderRightSidebar(myApps) {
     const currentIterationDate = new Date(now.getFullYear(), now.getMonth(), d);
     const isToday = isSameDay(currentIterationDate, now) ? "today" : "";
     const hasEvent = myApps.some(
-      (app) => isSameDay(new Date(app.date), currentIterationDate) && app.status.toLowerCase() === "approved"
-    ) ? "has-event" : "";
+      (app) =>
+        isSameDay(new Date(app.date), currentIterationDate) &&
+        app.status.toLowerCase() === "approved",
+    )
+      ? "has-event"
+      : "";
 
     days.push(`<div class="day-num ${isToday} ${hasEvent}">${d}</div>`);
   }
@@ -54,7 +61,7 @@ export function renderRightSidebar(myApps) {
                         <button class="gcal-sync-btn" 
                                 data-date="${nextApp.date}" 
                                 data-time="${nextApp.time}" 
-                                data-type="${nextApp.type || 'Counseling Session'}"
+                                data-type="${nextApp.type || "Counseling Session"}"
                                 onclick="window.handleStudentInlineSync(this)">
                           🗓️ Sync to Google Calendar
                         </button>
@@ -463,12 +470,28 @@ function attachBookingListener(session) {
 
   form.onsubmit = (e) => {
     e.preventDefault();
-    const submitBtn = document.getElementById("submitBooking");
-
-    // NEW: Get Counselor Dropdown elements
+    
+    // Get values from form
     const counselorSelect = document.getElementById("appCounselor");
-    const selectedOption =
-      counselorSelect.options[counselorSelect.selectedIndex];
+    const dateVal = document.getElementById("appDate").value;
+    
+    // --- NEW: DUPLICATE PREVENTION LOGIC ---
+    const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+    
+    const isDuplicate = allApps.some(app => 
+      app.studentId === session.id && 
+      app.date === dateVal && 
+      app.status !== "rejected" // Allows re-booking if previous attempt was rejected
+    );
+
+    if (isDuplicate) {
+      alert("You already have an appointment request pending or approved for this date.");
+      return; // Stop the function here, do not proceed to save or email
+    }
+    // ---------------------------------------
+
+    const submitBtn = document.getElementById("submitBooking");
+    const selectedOption = counselorSelect.options[counselorSelect.selectedIndex];
     const isAutoAssign = counselorSelect.value === "auto";
 
     const newApp = {
@@ -476,15 +499,10 @@ function attachBookingListener(session) {
       studentId: session.id,
       studentName: session.name,
       studentEmail: session.email,
-
-      // NEW: Dynamic counselor storage assignments
       counselorId: isAutoAssign ? null : parseInt(counselorSelect.value, 10),
-      counselorName: isAutoAssign
-        ? "Unassigned (Auto)"
-        : selectedOption.getAttribute("data-name"),
-
+      counselorName: isAutoAssign ? "Unassigned (Auto)" : selectedOption.getAttribute("data-name"),
       type: document.getElementById("appType").value,
-      date: document.getElementById("appDate").value,
+      date: dateVal, // Use the variable defined above
       time: document.getElementById("appTime").value,
       notes: document.getElementById("appNotes").value,
       status: "pending",
@@ -497,7 +515,6 @@ function attachBookingListener(session) {
     submitBtn.disabled = true;
 
     // 1. Save to LocalStorage
-    const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
     allApps.push(newApp);
     localStorage.setItem("gh_appointments", JSON.stringify(allApps));
 
@@ -507,63 +524,42 @@ function attachBookingListener(session) {
     let recipientName = "Guidance Team";
 
     if (isAutoAssign) {
-      // Send to ALL counselors if auto-assignment is requested
-      targetEmails = users
-        .filter((u) => u.role === "guidance")
-        .map((u) => u.email)
-        .join(",");
+      targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
     } else {
-      // Send ONLY to the selected counselor's registered email
       const chosenCounselor = users.find((u) => u.id === newApp.counselorId);
       if (chosenCounselor) {
         targetEmails = chosenCounselor.email;
         recipientName = chosenCounselor.name;
       } else {
-        // Fallback catch-all just in case
-        targetEmails = users
-          .filter((u) => u.role === "guidance")
-          .map((u) => u.email)
-          .join(",");
+        targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
       }
     }
 
     // 3. Send via EmailJS
-    emailjs
-      .send("service_mtv9cbi", "template_mublumh", {
+    emailjs.send("service_mtv9cbi", "template_mublumh", {
         subject_line: `New Appointment Request - ${session.name}`,
-        to_email: targetEmails, // Optimized single or group target routing string
+        to_email: targetEmails,
         recipient_name: recipientName,
-
-        // Dynamic Content
         header_title: "New Appointment Request",
-        main_message: `A new appointment request has been submitted by ${session.name} and assigned to ${newApp.counselorName}. Please review the details below.`,
-
-        // Table Data
+        main_message: `A new appointment request has been submitted by ${session.name} and assigned to ${newApp.counselorName}.`,
         app_type: newApp.type,
         app_date: newApp.date,
         app_time: newApp.time,
         status: "Pending",
-
-        // Student Notes
         notes: newApp.notes || "No notes provided by student.",
-      })
-      .then((res) => {
-        console.log("Email Sent Successfully!", res.status, res.text);
-        alert(
-          `Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`,
-        );
+    })
+    .then(() => {
+      window.logActivity(session, `Booked an appointment for ${newApp.date}`);
+        alert(`Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`);
         window.location.reload();
-      })
-      .catch((err) => {
+    })
+    .catch((err) => {
         console.error("EmailJS Detailed Error:", err);
-        alert(
-          `Email Error: ${err.text} (Code: ${err.status}). Booking still saved locally.`,
-        );
+        alert(`Email Error: ${err.text}. Booking saved locally.`);
         window.location.reload();
-      });
+    });
   };
 }
-
 export function attachCancelListeners() {
   const container = document.getElementById("app");
   if (!container) return;
@@ -611,7 +607,7 @@ export function attachCancelListeners() {
       },
     });
   });
-} 
+}
 
 // --- EmailJS Counselor Cancellation Notification Engine ---
 function notifyCounselorOfCancellation(appointment) {
@@ -726,40 +722,57 @@ window.handleStudentInlineSync = async (btn) => {
   const typeStr = btn.getAttribute("data-type") || "Counseling Session";
 
   if (!dateStr || !timeStr) {
-    console.error("❌ Google Calendar Hook Aborted: Missing structural appointment metrics.");
+    console.error(
+      "❌ Google Calendar Hook Aborted: Missing structural appointment metrics.",
+    );
     return;
   }
 
-  console.log("🚀 Normalizing Google payload layout parameters for properties:", { dateStr, timeStr });
+  console.log(
+    "🚀 Normalizing Google payload layout parameters for properties:",
+    { dateStr, timeStr },
+  );
 
   let cleanTime = timeStr.trim();
-  
+
   // SANITIZATION STEP: Normalize 12-hour formats ("02:30 PM") into robust 24-hour targets ("14:30")
-  if (cleanTime.toLowerCase().includes("am") || cleanTime.toLowerCase().includes("pm")) {
+  if (
+    cleanTime.toLowerCase().includes("am") ||
+    cleanTime.toLowerCase().includes("pm")
+  ) {
     const parts = cleanTime.split(" ");
     const timePart = parts[0];
     const modifier = parts[1] ? parts[1].toLowerCase() : "";
-    
+
     const timeSegments = timePart.split(":");
     let hours = timeSegments[0];
     const minutes = timeSegments[1];
-    
+
     if (modifier === "pm" && hours !== "12") {
       hours = String(parseInt(hours, 10) + 12);
     }
     if (modifier === "am" && hours === "12") {
       hours = "00";
     }
-    
+
     cleanTime = `${hours.padStart(2, "0")}:${minutes.substring(0, 2)}`;
   }
 
   try {
     const [hoursStr, minutesStr] = cleanTime.split(":");
-    const [year, month, day] = dateStr.split("-").map(num => parseInt(num, 10));
-    
+    const [year, month, day] = dateStr
+      .split("-")
+      .map((num) => parseInt(num, 10));
+
     // Construct real Date objects locally to avoid offset zone shifting issues
-    const startEventDate = new Date(year, month - 1, day, parseInt(hoursStr, 10), parseInt(minutesStr, 10), 0);
+    const startEventDate = new Date(
+      year,
+      month - 1,
+      day,
+      parseInt(hoursStr, 10),
+      parseInt(minutesStr, 10),
+      0,
+    );
     const endEventDate = new Date(startEventDate);
     endEventDate.setHours(startEventDate.getHours() + 1); // Allocate a stable 1-hour session window
 
@@ -769,9 +782,10 @@ window.handleStudentInlineSync = async (btn) => {
     // Send verified standardized ISO formatting data strings directly to Google calendar client layers
     const success = await createCalendarEvent({
       summary: `Granby Guidance: ${typeStr}`,
-      description: "Scheduled consultation slot with the Granby Counseling Department.",
+      description:
+        "Scheduled consultation slot with the Granby Counseling Department.",
       startTime: startEventDate.toISOString(),
-      endTime: endEventDate.toISOString()
+      endTime: endEventDate.toISOString(),
     });
 
     if (success) {
@@ -783,7 +797,10 @@ window.handleStudentInlineSync = async (btn) => {
       btn.disabled = false;
     }
   } catch (err) {
-    console.error("❌ Exception captured inside the Google Calendar formatting sequence:", err);
+    console.error(
+      "❌ Exception captured inside the Google Calendar formatting sequence:",
+      err,
+    );
     btn.innerText = "🗓️ Try Sync Again";
     btn.disabled = false;
   }
@@ -820,7 +837,6 @@ export function renderStudentView(root, session, onLogout) {
                 </button>
             </nav>
         </aside>
-        
         <main class="content-area" style="padding: 40px; box-sizing: border-box; flex: 1;">
             
             <section id="dynamic-content">${renderDashboard(session)}</section>
@@ -857,26 +873,25 @@ export function renderStudentView(root, session, onLogout) {
   attachCancelListeners();
   initializeFloatingChatboxEngine();
 
-  
   listenForRealTimeUpdates(() => {
-  const content = document.getElementById("dynamic-content");
-  const activeNav = document.querySelector(".nav-item.active");
-  
-  // 1. Dashboard Routing & Persistence Guard
-  if (!activeNav || activeNav.getAttribute("data-target") !== "dashboard") {
-    // If not on dashboard, ensure the banner slot is empty to save space/distraction
+    const content = document.getElementById("dynamic-content");
+    const activeNav = document.querySelector(".nav-item.active");
 
-    return;
-  }
+    // 1. Dashboard Routing & Persistence Guard
+    if (!activeNav || activeNav.getAttribute("data-target") !== "dashboard") {
+      // If not on dashboard, ensure the banner slot is empty to save space/distraction
 
-  console.log("Synchronizing student dashboard metrics...");
+      return;
+    }
 
-  // 2. Structural Guard: Draw dashboard shell ONCE
-  if (content && !content.querySelector(".dashboard-loaded-marker")) {
-    content.innerHTML = `<div class="dashboard-loaded-marker"></div>${renderDashboard(session)}`;
-    attachCancelListeners();
-  }
-});
+    console.log("Synchronizing student dashboard metrics...");
+
+    // 2. Structural Guard: Draw dashboard shell ONCE
+    if (content && !content.querySelector(".dashboard-loaded-marker")) {
+      content.innerHTML = `<div class="dashboard-loaded-marker"></div>${renderDashboard(session)}`;
+      attachCancelListeners();
+    }
+  });
 }
 // --- Chatbox Operational Functionality Code Core Engine ---
 function initializeFloatingChatboxEngine() {
@@ -922,7 +937,7 @@ function initializeFloatingChatboxEngine() {
 
     try {
       isAiResponding = true;
-      
+
       // UI Lock down: Disable user inputs while the AI model streams chunks
       input.disabled = true;
       const submitBtn = form.querySelector("button[type='submit']");
@@ -930,7 +945,8 @@ function initializeFloatingChatboxEngine() {
 
       // 1. RENDER USER MESSAGE BUBBLE (Via high-performance Node construction)
       const userBubble = document.createElement("div");
-      userBubble.style.cssText = "background: #3b82f6; color: white; padding: 10px 12px; border-radius: 8px 8px 0px 8px; max-width: 85%; align-self: flex-end; line-height: 1.5; word-break: break-word; margin-bottom: 8px;";
+      userBubble.style.cssText =
+        "background: #3b82f6; color: white; padding: 10px 12px; border-radius: 8px 8px 0px 8px; max-width: 85%; align-self: flex-end; line-height: 1.5; word-break: break-word; margin-bottom: 8px;";
       userBubble.textContent = userText; // Protects completely against XSS script injection
       viewport.appendChild(userBubble);
       viewport.scrollTop = viewport.scrollHeight;
@@ -939,12 +955,13 @@ function initializeFloatingChatboxEngine() {
       const loadingBubbleId = `ai-loading-${Date.now()}`;
       const loadingBubble = document.createElement("div");
       loadingBubble.id = loadingBubbleId;
-      loadingBubble.style.cssText = "background: #e2e8f0; color: #64748b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; font-style: italic; margin-bottom: 8px;";
+      loadingBubble.style.cssText =
+        "background: #e2e8f0; color: #64748b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; font-style: italic; margin-bottom: 8px;";
 
       const statusSpan = document.createElement("span");
       statusSpan.id = `status-text-${loadingBubbleId}`; // Explicit context target keying
       statusSpan.textContent = "🤖 Waking up neural processor...";
-      
+
       loadingBubble.appendChild(statusSpan);
       viewport.appendChild(loadingBubble);
       viewport.scrollTop = viewport.scrollHeight;
@@ -955,11 +972,14 @@ function initializeFloatingChatboxEngine() {
         "General Campus Inquiry",
         (progressText) => {
           // Look up our targeted scoped sub-element node safely
-          const statusNode = document.getElementById(`status-text-${loadingBubbleId}`);
+          const statusNode = document.getElementById(
+            `status-text-${loadingBubbleId}`,
+          );
           if (statusNode) {
-            statusNode.textContent = progressText.length > 40
-              ? `🤖 ${progressText.substring(0, 37)}...`
-              : `🤖 ${progressText}`;
+            statusNode.textContent =
+              progressText.length > 40
+                ? `🤖 ${progressText.substring(0, 37)}...`
+                : `🤖 ${progressText}`;
           }
         },
       );
@@ -969,31 +989,35 @@ function initializeFloatingChatboxEngine() {
 
       // 4. RENDER FINAL PROCESSED REASONING VALUE
       const aiBubble = document.createElement("div");
-      aiBubble.style.cssText = "background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5; margin-bottom: 8px;";
-      
-      // innerHTML is safe here since the systemInstruction prompt output structure uses markdown formatting tags
-      aiBubble.innerHTML = aiReply || "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?";
-      viewport.appendChild(aiBubble);
+      aiBubble.style.cssText =
+        "background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5; margin-bottom: 8px;";
 
+      // innerHTML is safe here since the systemInstruction prompt output structure uses markdown formatting tags
+      aiBubble.innerHTML =
+        aiReply ||
+        "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?";
+      viewport.appendChild(aiBubble);
     } catch (err) {
       // Emergency teardown layout clear steps on pipeline breaks
       const activeLoader = viewport.querySelector("[id^='ai-loading-']");
       if (activeLoader) activeLoader.remove();
-      
+
       console.error("Local inference execution failed:", err);
-      
+
       const errorBubble = document.createElement("div");
-      errorBubble.style.cssText = "background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; margin-bottom: 8px;";
-      errorBubble.textContent = "⚠️ Cloud processing encountered a rate-limit layout bump. Please try your request again in a few moments.";
+      errorBubble.style.cssText =
+        "background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; margin-bottom: 8px;";
+      errorBubble.textContent =
+        "⚠️ Cloud processing encountered a rate-limit layout bump. Please try your request again in a few moments.";
       viewport.appendChild(errorBubble);
     } finally {
       // 🔓 RELEASE THE MUTEX MUTATION LATCH
       isAiResponding = false;
       input.disabled = false;
-      
+
       const submitBtn = form.querySelector("button[type='submit']");
       if (submitBtn) submitBtn.disabled = false;
-      
+
       viewport.scrollTop = viewport.scrollHeight;
       input.focus(); // Keep UX snapping clean
     }
@@ -1036,14 +1060,12 @@ export function setupStudentListeners(onLogout, session) {
       }
 
       const target = btn.getAttribute("data-target");
-     
 
       // --- CORE SUB-ROUTING ENGINE ---
       if (target === "dashboard") {
         // Drop the template string back into the DOM
         content.innerHTML = renderDashboard(session);
         attachCancelListeners();
-        
       } else if (target === "book") {
         content.innerHTML = renderBookingForm(session);
         attachBookingListener(session);
@@ -1060,4 +1082,27 @@ export function setupStudentListeners(onLogout, session) {
   if (logoutBtn) {
     logoutBtn.onclick = onLogout;
   }
+}
+
+function handleCreateAppointment(newAppointment) {
+  // 1. Fetch current appointments
+  const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+
+  // 2. CHECK FOR DUPLICATES
+  // Look for any existing appointment for this student on the same date
+  const isDuplicate = appointments.some(app => 
+    app.studentId === newAppointment.studentId && 
+    app.date === newAppointment.date && 
+    app.status !== 'rejected' // Only count active or pending as duplicates
+  );
+
+  if (isDuplicate) {
+    alert("You already have an appointment scheduled for this date.");
+    return false; // Stop the process
+  }
+
+  // 3. If no duplicate, proceed to save
+  appointments.push(newAppointment);
+  localStorage.setItem("gh_appointments", JSON.stringify(appointments));
+  return true; // Success
 }

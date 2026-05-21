@@ -1,4 +1,4 @@
-import { gapi } from 'gapi-script';
+import { gapi } from "gapi-script";
 
 /**
  * GRANBY GATEWAY - GOOGLE CALENDAR SYNC ENGINE
@@ -7,7 +7,8 @@ import { gapi } from 'gapi-script';
 
 // CONFIGURATION CONSTANTS
 // Replace this placeholder string with the client ID from your Google Cloud Console
-const CLIENT_ID = "842259520040-fvotbl74ulldonh855onveca5ta7hm9p.apps.googleusercontent.com";
+const CLIENT_ID =
+  "842259520040-fvotbl74ulldonh855onveca5ta7hm9p.apps.googleusercontent.com";
 const SCOPES = "https://www.googleapis.com/auth/calendar";
 
 let tokenClient = null;
@@ -24,10 +25,12 @@ export function initGoogleAuth(onStatusUpdate) {
   script.src = "https://accounts.google.com/gsi/client";
   script.async = true;
   script.defer = true;
-  
+
   script.onload = () => {
     if (!window.google || !window.google.accounts) {
-      console.error("❌ Google Identity Services SDK loaded but could not initialize.");
+      console.error(
+        "❌ Google Identity Services SDK loaded but could not initialize.",
+      );
       return;
     }
 
@@ -37,21 +40,24 @@ export function initGoogleAuth(onStatusUpdate) {
       scope: SCOPES,
       callback: (tokenResponse) => {
         if (tokenResponse.error) {
-          console.error("❌ Google Authorization Exception:", tokenResponse.error);
+          console.error(
+            "❌ Google Authorization Exception:",
+            tokenResponse.error,
+          );
           if (onStatusUpdate) onStatusUpdate(false);
           return;
         }
-        
+
         // Save the active authentication string token parameter state
         accessToken = tokenResponse.access_token;
         localStorage.setItem("gh_gcal_token", accessToken);
-        
+
         if (onStatusUpdate) onStatusUpdate(true);
       },
     });
 
     // C. Spin up the legacy GAPI core layer to ensure network requests format properly
-    gapi.load('client', async () => {
+    gapi.load("client", async () => {
       try {
         await gapi.client.init({
           clientId: CLIENT_ID,
@@ -63,7 +69,7 @@ export function initGoogleAuth(onStatusUpdate) {
       }
     });
   };
-  
+
   document.head.appendChild(script);
 }
 
@@ -73,7 +79,9 @@ export function initGoogleAuth(onStatusUpdate) {
  */
 export function handleSignIn() {
   if (!tokenClient) {
-    console.warn("⚠️ Token client lost or not initialized. Attempting re-initialization...");
+    console.warn(
+      "⚠️ Token client lost or not initialized. Attempting re-initialization...",
+    );
     // Force rebuild token client if it went missing during a server blink
     if (window.google && window.google.accounts) {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -84,14 +92,16 @@ export function handleSignIn() {
           localStorage.setItem("gh_gcal_token", accessToken);
         },
       });
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({ prompt: "consent" });
     } else {
-      console.error("❌ Google Identity script is completely missing from the DOM layout.");
+      console.error(
+        "❌ Google Identity script is completely missing from the DOM layout.",
+      );
     }
     return;
   }
-  
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+
+  tokenClient.requestAccessToken({ prompt: "consent" });
 }
 /**
  * 3. Log out / Clear Google Account Sync Status
@@ -110,9 +120,11 @@ export function handleSignOut() {
 export async function createCalendarEvent(details) {
   // Check memory state first, fall back to local database storage configurations
   const token = accessToken || localStorage.getItem("gh_gcal_token");
-  
+
   if (!token) {
-    alert("Please sign into your Google Account first to synchronize this appointment!");
+    alert(
+      "Please sign into your Google Account first to synchronize this appointment!",
+    );
     handleSignIn();
     return null;
   }
@@ -130,8 +142,8 @@ export async function createCalendarEvent(details) {
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
     reminders: {
-      useDefault: true
-    }
+      useDefault: true,
+    },
   };
 
   try {
@@ -144,30 +156,36 @@ export async function createCalendarEvent(details) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(eventPayload),
-      }
+      },
     );
 
     // If token expired (401 Unauthorized), clean local caches and re-trigger authentication window
     if (response.status === 401) {
-      console.warn("⚠️ Google Access Token has expired. Renewing access token session variables...");
+      console.warn(
+        "⚠️ Google Access Token has expired. Renewing access token session variables...",
+      );
       handleSignOut();
       handleSignIn();
       return null;
     }
 
     if (!response.ok) {
-  const errorText = await response.text();
-  console.error("🔴 GOOGLE CALENDAR DETAILED ERROR LOG:", errorText); // <-- ADD THIS LINE
-  throw new Error(`Google API responding exception flag: ${errorText}`);
-}
+      const errorText = await response.text();
+      console.error("🔴 GOOGLE CALENDAR DETAILED ERROR LOG:", errorText); // <-- ADD THIS LINE
+      throw new Error(`Google API responding exception flag: ${errorText}`);
+    }
 
     const createdEvent = await response.json();
-    console.log("🎉 Appointment successfully synchronized! Live URL Link:", createdEvent.htmlLink);
+    console.log(
+      "🎉 Appointment successfully synchronized! Live URL Link:",
+      createdEvent.htmlLink,
+    );
     return createdEvent;
-
   } catch (error) {
     console.error("❌ Fatal tracking crash writing to Google Calendar:", error);
-    alert("An error occurred while pushing this scheduling data directly to Google Services.");
+    alert(
+      "An error occurred while pushing this scheduling data directly to Google Services.",
+    );
     return null;
   }
 }
