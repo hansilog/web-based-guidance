@@ -8,6 +8,7 @@ our title is web based guidance management and scheduling system.
 - Pick a counselor or "Any Available" (assigned to the free counselor with the lightest load)
 - Reschedule or cancel pending/upcoming sessions, rate completed sessions (1–5 stars)
 - Notification bell for approvals, rejections, completed sessions, and follow-up recommendations
+- Printable appointment slip for approved upcoming sessions (leaves out the counseling type and notes)
 - Appointment history, Google Calendar sync, Granby AI campus chat
 
 **Guidance counselors**

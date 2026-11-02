@@ -93,12 +93,18 @@ function getStudentActions(app) {
     canReschedule: canChange,
     canRate: app.status === "completed" && !app.feedback,
     canBookFollowUp: app.status === "completed" && app.followUp,
+    canPrintSlip: app.status === "approved" && isUpcoming(app),
   };
 }
 
 function renderActionButtons(app) {
   const act = getStudentActions(app);
   const buttons = [];
+  if (act.canPrintSlip) {
+    buttons.push(
+      `<button type="button" class="row-action slip-btn" data-id="${app.id}" title="Print appointment slip" aria-label="Print appointment slip"><i class="material-icons">print</i></button>`,
+    );
+  }
   if (act.canReschedule) {
     buttons.push(
       `<button type="button" class="row-action reschedule-btn" data-id="${app.id}" title="Reschedule"><i class="material-icons">event_repeat</i></button>`,
@@ -129,6 +135,71 @@ function renderActionButtons(app) {
     return `<i class="material-icons done-icon" title="Completed">check_circle</i>`;
   }
   return `<span class="muted-dash">—</span>`;
+}
+
+// --- APPOINTMENT SLIP ---
+
+// Leaves out the counseling type and notes: a printed slip can be seen by others
+function slipHtml(session, app) {
+  const courseSection = [session.course, session.section]
+    .filter(Boolean)
+    .join(" - ");
+  const rows = [
+    ["Student", session.name],
+    ["Course / Section", courseSection],
+    ["Date", formatDate(app.date)],
+    ["Time", formatTime12(app.time)],
+    ["Counselor", app.counselorName || "Guidance Office"],
+    ["Session Mode", app.mode],
+  ].filter(([, value]) => value);
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Appointment Slip GG-${app.id}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
+    .slip { max-width: 480px; margin: 0 auto; border: 2px solid #0f172a; border-radius: 12px; padding: 28px; }
+    h1 { font-size: 20px; margin: 0; }
+    h2 { font-size: 14px; font-weight: 600; color: #475569; margin: 4px 0 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; text-align: left; vertical-align: top; }
+    th { width: 42%; color: #475569; font-weight: 600; }
+    td { font-weight: 700; }
+    .ref { margin: 18px 0 0; font-size: 13px; font-weight: 700; }
+    .note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="slip">
+    <h1>Granby Gateway</h1>
+    <h2>Guidance Appointment Slip</h2>
+    <table>
+      ${rows.map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`).join("")}
+    </table>
+    <p class="ref">Reference No.: GG-${app.id}</p>
+    <p class="note">Please arrive on time and present this slip at the guidance office. Office hours: Mon-Fri, 8AM - 5PM (lunch 12-1PM).</p>
+  </div>
+</body>
+</html>`;
+}
+
+// Prints from a hidden frame so popup blockers can't stop it
+function printSlip(session, app) {
+  const frame = document.createElement("iframe");
+  frame.title = "Appointment slip";
+  frame.className = "slip-frame";
+  frame.style.cssText =
+    "position:fixed;width:0;height:0;border:0;visibility:hidden;";
+  frame.onload = () => {
+    const win = frame.contentWindow;
+    win.onafterprint = () => frame.remove();
+    win.focus();
+    win.print();
+  };
+  frame.srcdoc = slipHtml(session, app);
+  document.body.appendChild(frame);
 }
 
 // --- SLOT PICKER (booking form + reschedule dialog) ---
@@ -1178,7 +1249,7 @@ export function attachAppointmentActions(session) {
   // Assign (not add) so re-rendering never stacks duplicate handlers
   container.onclick = (e) => {
     const btn = e.target.closest(
-      ".cancel-btn-table, .reschedule-btn, .rate-btn, .followup-btn",
+      ".cancel-btn-table, .reschedule-btn, .rate-btn, .followup-btn, .slip-btn",
     );
     if (!btn) return;
 
@@ -1190,6 +1261,7 @@ export function attachAppointmentActions(session) {
     else if (btn.classList.contains("reschedule-btn"))
       openRescheduleDialog(session, app);
     else if (btn.classList.contains("rate-btn")) openRatingDialog(session, app);
+    else if (btn.classList.contains("slip-btn")) printSlip(session, app);
     else if (btn.classList.contains("followup-btn")) {
       bookingPrefill = {
         counselorId: app.counselorId || "auto",
