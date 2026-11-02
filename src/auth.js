@@ -1,10 +1,16 @@
 import emailjs from "@emailjs/browser";
+import { hashPassword } from "./syncUtil.js";
 import "./styles/auth.css";
 
 // Initialize EmailJS
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
-export function renderLoginPage(root, onLogin, onRegister, startAsRegister = false) {
+export function renderLoginPage(
+  root,
+  onLogin,
+  onRegister,
+  startAsRegister = false,
+) {
   let isRegistering = startAsRegister;
   let isForgotFlow = false;
   let generatedOTP = null;
@@ -33,7 +39,9 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
             <div id="authError" class="error-banner hidden"></div>
 
             <div class="form-group" id="formGroup">
-              ${isRegistering ? `
+              ${
+                isRegistering
+                  ? `
                 <div class="input-group-row">
                     <div class="input-wrapper plain"><input type="text" id="regFirst" placeholder="First Name" required></div>
                     <div class="input-wrapper plain"><input type="text" id="regMiddle" placeholder="Middle Name (Optional)"></div>
@@ -61,39 +69,57 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
                     </div>
                     <div class="input-wrapper plain"><select id="regSection" required><option value="" disabled selected>Section</option></select></div>
                 </div>
-              ` : ""}
+              `
+                  : ""
+              }
 
-              ${isForgotFlow ? `
+              ${
+                isForgotFlow
+                  ? `
                 <div class="input-wrapper plain"><input type="email" id="resetEmail" placeholder="Registered Email" required></div>
                 <div class="input-wrapper plain hidden" id="otpSection">
                     <input type="text" id="otpInput" placeholder="Enter 6-digit OTP">
                     <input type="password" id="newPass" placeholder="New Password">
                 </div>
-              ` : ""}
+              `
+                  : ""
+              }
               
-              ${!isForgotFlow ? `
+              ${
+                !isForgotFlow
+                  ? `
                 <div class="input-wrapper plain"><input type="text" id="username" placeholder="Username" required></div>
                 <div class="input-wrapper plain password-wrapper">
                     <input type="password" id="password" placeholder="Password" required>
                     <button type="button" class="toggle-password" data-target="password"><i class="material-icons">visibility</i></button>
                 </div>
-                ${isRegistering ? `
+                ${
+                  isRegistering
+                    ? `
                     <div class="input-wrapper plain password-wrapper">
                         <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
                         <button type="button" class="toggle-password" data-target="confirmPassword"><i class="material-icons">visibility</i></button>
                     </div>
-                ` : ""}
-              ` : ""}
+                `
+                    : ""
+                }
+              `
+                  : ""
+              }
 
               <button id="authBtn" class="primary-btn">${authBtnText}</button>
             </div>
 
             <div class="auth-footer">
-              ${!isForgotFlow ? `
+              ${
+                !isForgotFlow
+                  ? `
                 <span>${isRegistering ? "Already have an account?" : "New to Granby Gateway?"}</span>
                 <button id="toggleAuth" class="link-btn">${isRegistering ? "Sign In" : "Register Now"}</button>
                 <button id="forgotBtn" class="link-btn">Forgot Password?</button>
-              ` : `<button id="backToLogin" class="link-btn">Back to Login</button>`}
+              `
+                  : `<button id="backToLogin" class="link-btn">Back to Login</button>`
+              }
             </div>
           </div>
         </div>
@@ -103,39 +129,84 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
 
   render();
 
+  // Explain why the user landed back here (e.g. idle logout)
+  const logoutReason = sessionStorage.getItem("gh_logout_reason");
+  if (logoutReason) {
+    sessionStorage.removeItem("gh_logout_reason");
+    const banner = document.getElementById("authError");
+    banner.innerText = logoutReason;
+    banner.classList.remove("hidden");
+  }
+
   root.onclick = async (e) => {
-    if (e.target.id === "toggleAuth") { isRegistering = !isRegistering; render(); }
-    else if (e.target.id === "forgotBtn") { isForgotFlow = true; render(); }
-    else if (e.target.id === "backToLogin") { isForgotFlow = false; render(); }
+    if (e.target.id === "toggleAuth") {
+      isRegistering = !isRegistering;
+      render();
+    } else if (e.target.id === "forgotBtn") {
+      isForgotFlow = true;
+      render();
+    } else if (e.target.id === "backToLogin") {
+      isForgotFlow = false;
+      generatedOTP = null;
+      render();
+    }
 
     const toggleBtn = e.target.closest(".toggle-password");
     if (toggleBtn) {
-      const input = document.getElementById(toggleBtn.getAttribute("data-target"));
+      const input = document.getElementById(
+        toggleBtn.getAttribute("data-target"),
+      );
       const icon = toggleBtn.querySelector("i");
       input.type = input.type === "password" ? "text" : "password";
-      icon.innerText = input.type === "password" ? "visibility" : "visibility_off";
+      icon.innerText =
+        input.type === "password" ? "visibility" : "visibility_off";
     }
 
     if (e.target.id === "authBtn") {
       const errorBanner = document.getElementById("authError");
-      const showError = (msg) => { errorBanner.innerText = msg; errorBanner.classList.remove("hidden"); };
+      const showError = (msg) => {
+        errorBanner.innerText = msg;
+        errorBanner.classList.remove("hidden");
+      };
 
       if (isForgotFlow) {
         const emailVal = document.getElementById("resetEmail").value.trim();
         if (!generatedOTP) {
           const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
-          if (!users.find((u) => u.email === emailVal)) return showError("Email not registered.");
-          
+          if (!users.find((u) => u.email === emailVal))
+            return showError("Email not registered.");
+
           generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
           try {
-            await emailjs.send("service_mtv9cbi", "template_gbmoria", { to_email: emailVal, otp: generatedOTP });
+            await emailjs.send("service_mtv9cbi", "template_gbmoria", {
+              to_email: emailVal,
+              otp: generatedOTP,
+              otp_code: generatedOTP,
+            });
             document.getElementById("otpSection").classList.remove("hidden");
             document.getElementById("resetEmail").disabled = true;
             e.target.innerText = "Verify & Reset";
-          } catch (err) { showError("Failed to send."); }
-        } else if (document.getElementById("otpInput").value === generatedOTP) {
+          } catch (err) {
+            generatedOTP = null;
+            showError("Failed to send.");
+          }
+        } else if (
+          document.getElementById("otpInput").value.trim() === generatedOTP
+        ) {
+          const newPass = document.getElementById("newPass").value;
+          if (newPass.length < 3)
+            return showError("Please enter a new password.");
+
+          const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
+          const index = users.findIndex((u) => u.email === emailVal);
+          if (index === -1) return showError("Email not registered.");
+
+          users[index].pass = await hashPassword(newPass);
+          localStorage.setItem("gh_users", JSON.stringify(users));
+          generatedOTP = null;
           alert("Password updated!");
-          isForgotFlow = false; render();
+          isForgotFlow = false;
+          render();
         } else {
           showError("Invalid OTP");
         }
@@ -143,8 +214,29 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
         const first = document.getElementById("regFirst").value.trim();
         const middle = document.getElementById("regMiddle").value.trim();
         const last = document.getElementById("regLast").value.trim();
-        const fullName = [first, middle, last].filter((part) => part !== "").join(" ");
-        
+        const fullName = [first, middle, last]
+          .filter((part) => part !== "")
+          .join(" ");
+        const required = [
+          "regFirst",
+          "regLast",
+          "regEmail",
+          "regYearLevel",
+          "regCourse",
+          "regSection",
+          "username",
+          "password",
+        ];
+        if (required.some((id) => !document.getElementById(id).value.trim())) {
+          return showError("Please fill in all required fields.");
+        }
+        if (
+          document.getElementById("password").value !==
+          document.getElementById("confirmPassword").value
+        ) {
+          return showError("Passwords do not match.");
+        }
+
         onRegister(
           fullName,
           document.getElementById("username").value,
@@ -154,10 +246,17 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
           document.getElementById("regCourse").value,
           document.getElementById("regSection").value,
           showError,
-          () => { isRegistering = false; render(); }
+          () => {
+            isRegistering = false;
+            render();
+          },
         );
       } else {
-        onLogin(document.getElementById("username").value, document.getElementById("password").value, showError);
+        onLogin(
+          document.getElementById("username").value,
+          document.getElementById("password").value,
+          showError,
+        );
       }
     }
   };
@@ -165,7 +264,8 @@ export function renderLoginPage(root, onLogin, onRegister, startAsRegister = fal
   root.onchange = (e) => {
     if (e.target.id === "regYearLevel") {
       const sectionSelect = document.getElementById("regSection");
-      sectionSelect.innerHTML = '<option value="" disabled selected>Section</option>';
+      sectionSelect.innerHTML =
+        '<option value="" disabled selected>Section</option>';
       ["A", "B", "C"].forEach((s) => {
         const sectionValue = `${e.target.value.charAt(0)}${s}`;
         sectionSelect.innerHTML += `<option value="${sectionValue}">Section ${sectionValue}</option>`;

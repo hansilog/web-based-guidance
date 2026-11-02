@@ -1,7 +1,32 @@
+// --- CRYPTOGRAPHIC UTILITY ---
+export async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Escape user-supplied text before placing it inside innerHTML templates
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function listenForRealTimeUpdates(renderCallback) {
   window.addEventListener("storage", (e) => {
-    // Only trigger a re-render if the changes happened to the appointments database
-    if (e.key === "gh_appointments") {
+    // Re-render when shared data changes in another tab
+    const watchedKeys = [
+      "gh_appointments",
+      "gh_global_broadcasts",
+      "gh_notifications",
+      "gh_counselor_blocks",
+    ];
+    if (watchedKeys.includes(e.key)) {
       console.log(
         " Real-time database mutation detected! Syncing UI layouts...",
       );
@@ -13,13 +38,13 @@ export function listenForRealTimeUpdates(renderCallback) {
 
 window.logActivity = (user, action) => {
   const logs = JSON.parse(localStorage.getItem("gh_activity_logs") || "[]");
-  
+
   const newLog = {
     id: Date.now(),
     timestamp: new Date().toISOString(),
     userName: user.name,
     userRole: user.role, // 'student' or 'guidance'
-    action // e.g., "Logged in", "Created Appointment", "Updated Status"
+    action, // e.g., "Logged in", "Created Appointment", "Updated Status"
   };
 
   logs.push(newLog);
@@ -27,8 +52,10 @@ window.logActivity = (user, action) => {
 };
 
 export function renderBroadcastBanner() {
-  const broadcasts = JSON.parse(localStorage.getItem("gh_global_broadcasts") || "[]");
-  
+  const broadcasts = JSON.parse(
+    localStorage.getItem("gh_global_broadcasts") || "[]",
+  );
+
   // If there are no broadcasts, return an empty string to avoid rendering empty UI
   if (broadcasts.length === 0) return "";
 
@@ -50,10 +77,10 @@ export function renderBroadcastBanner() {
       <i class="material-icons" style="color: #d97706; font-size: 24px;">campaign</i>
       <div style="flex-grow: 1;">
         <strong style="display: block; color: #92400e; font-size: 0.9rem;">
-          Announcement — ${latest.date}
+          Announcement — ${escapeHtml(latest.date)}
         </strong>
         <span style="color: #b45309; font-size: 0.95rem;">
-          ${latest.message}
+          ${escapeHtml(latest.message)}
         </span>
       </div>
       <button onclick="this.parentElement.style.display='none'" style="

@@ -8,45 +8,262 @@ import {
   getDate,
   isSameDay,
 } from "date-fns";
-import { listenForRealTimeUpdates, renderBroadcastBanner } from "./syncUtil.js";
+import {
+  listenForRealTimeUpdates,
+  renderBroadcastBanner,
+  escapeHtml,
+} from "./syncUtil.js";
 import { getPreBookingAdvice } from "./ai.js";
 import { createCalendarEvent } from "./calendar.js";
-
+import {
+  getAppointments,
+  saveAppointments,
+  updateAppointment,
+  getCounselors,
+  checkDate,
+  getSlotStates,
+  isCounselorFree,
+  autoAssignCounselor,
+  getCounselorTargets,
+  notifyCounselors,
+  appointmentStart,
+  parseDate,
+  formatTime12,
+  toDateStr,
+  MAX_DAYS_AHEAD,
+  ACTIVE_STATUSES,
+  COUNSELING_TYPES,
+  SESSION_MODES,
+} from "./store.js";
+import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
+const EMAIL_SERVICE = "service_mtv9cbi";
+const EMAIL_TEMPLATE = "template_mublumh";
+
+const STATUS_LABELS = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+  completed: "Completed",
+  "no-show": "No-show",
+};
+
+// Choices carried into the booking form by "Book follow-up"
+let bookingPrefill = null;
+// Set while the booking form is open, so live updates can refresh open times
+let refreshBookingSlots = null;
+// Months ahead of the current one shown by the booking page calendar
+let calendarMonthOffset = 0;
+
+// --- SMALL HELPERS ---
+
+function getMyApps(session) {
+  return getAppointments().filter((a) => a.studentId === session.id);
+}
+
+function formatDate(date) {
+  return format(parseDate(date), "MMMM dd, yyyy");
+}
+
+function isUpcoming(app) {
+  return appointmentStart(app) > new Date();
+}
+
+function goTo(target) {
+  document.querySelector(`.nav-item[data-target="${target}"]`)?.click();
+}
+
+function statusPill(status) {
+  return `<span class="status-pill ${escapeHtml(status)}">${STATUS_LABELS[status] || escapeHtml(status)}</span>`;
+}
+
+function stars(rating) {
+  return "★★★★★".slice(0, rating) + "☆☆☆☆☆".slice(0, 5 - rating);
+}
+
+// What the student can do with an appointment right now
+function getStudentActions(app) {
+  const canChange =
+    app.status === "pending" || (app.status === "approved" && isUpcoming(app));
+  return {
+    canCancel: canChange,
+    canReschedule: canChange,
+    canRate: app.status === "completed" && !app.feedback,
+    canBookFollowUp: app.status === "completed" && app.followUp,
+  };
+}
+
+function renderActionButtons(app) {
+  const act = getStudentActions(app);
+  const buttons = [];
+  if (act.canReschedule) {
+    buttons.push(
+      `<button type="button" class="row-action reschedule-btn" data-id="${app.id}" title="Reschedule"><i class="material-icons">event_repeat</i></button>`,
+    );
+  }
+  if (act.canCancel) {
+    buttons.push(
+      `<button type="button" class="row-action danger cancel-btn-table" data-id="${app.id}" title="Cancel appointment"><i class="material-icons">cancel</i></button>`,
+    );
+  }
+  if (act.canRate) {
+    buttons.push(
+      `<button type="button" class="row-action rate-btn" data-id="${app.id}" title="Rate this session"><i class="material-icons">star_rate</i></button>`,
+    );
+  }
+  if (act.canBookFollowUp) {
+    buttons.push(
+      `<button type="button" class="row-action followup-btn" data-id="${app.id}" title="Book the follow-up your counselor recommended"><i class="material-icons">event_available</i></button>`,
+    );
+  }
+  if (buttons.length > 0) {
+    return `<div class="row-actions">${buttons.join("")}</div>`;
+  }
+  if (app.status === "approved") {
+    return `<i class="material-icons muted-icon" title="Waiting for your counselor to close this session">hourglass_bottom</i>`;
+  }
+  if (app.status === "completed") {
+    return `<i class="material-icons done-icon" title="Completed">check_circle</i>`;
+  }
+  return `<span class="muted-dash">—</span>`;
+}
+
+// --- SLOT PICKER (booking form + reschedule dialog) ---
+
+function parseCounselorValue(value) {
+  if (value === "auto") return "auto";
+  return value ? Number(value) : null;
+}
+
+function slotPickerHtml(date, counselorKey, selected = "", ignoreAppId = null) {
+  if (!counselorKey) {
+    return `<p class="slot-hint">Choose a counselor to see open times.</p>`;
+  }
+  if (!date) return `<p class="slot-hint">Choose a date to see open times.</p>`;
+
+  const reason = checkDate(date, counselorKey);
+  if (reason) return `<p class="slot-hint warn">${escapeHtml(reason)}</p>`;
+
+  const slots = getSlotStates(date, counselorKey, ignoreAppId);
+  if (!slots.some((s) => s.free)) {
+    return `<p class="slot-hint warn">No open times on this day. Please try another date.</p>`;
+  }
+  return `
+    <div class="slot-grid">
+      ${slots
+        .map(
+          (s) => `
+        <button type="button" class="slot-btn ${s.time === selected ? "selected" : ""}"
+                data-time="${s.time}" ${s.free ? "" : "disabled"}
+                title="${s.free ? "Available" : s.reason}">
+          ${formatTime12(s.time)}
+        </button>`,
+        )
+        .join("")}
+    </div>`;
+}
+
+// Clicking a slot marks it selected and stores its time in the hidden input
+function bindSlotPicker(box, hiddenInput) {
+  box.onclick = (e) => {
+    const btn = e.target.closest(".slot-btn:not([disabled])");
+    if (!btn) return;
+    box
+      .querySelectorAll(".slot-btn")
+      .forEach((b) => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    hiddenInput.value = btn.dataset.time;
+  };
+}
+
+function dateLimits() {
+  const max = new Date();
+  max.setDate(max.getDate() + MAX_DAYS_AHEAD);
+  return { min: toDateStr(new Date()), max: toDateStr(max) };
+}
+
 // --- VIEW COMPONENTS ---
-export function renderRightSidebar(myApps) {
+
+// Month grid. When pickable (booking page), open weekdays can be clicked to choose the date.
+function calendarInnerHtml(myApps, { pickable = false, selected = "" } = {}) {
   const now = new Date();
+  const month = new Date(
+    now.getFullYear(),
+    now.getMonth() + (pickable ? calendarMonthOffset : 0),
+    1,
+  );
+  const { min, max } = dateLimits();
 
-  // 1. Get the single next approved appointment
-  const nextApp = myApps
-    .filter(
-      (a) => a.status.toLowerCase() === "approved" && new Date(a.date) >= now,
-    )
-    .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
-
-  // 2. Build the Calendar HTML Grid Layout
-  const startDay = getDay(startOfMonth(now));
-  const totalDays = getDate(endOfMonth(now));
+  const startDay = getDay(startOfMonth(month));
+  const totalDays = getDate(endOfMonth(month));
   const padding = Array(startDay).fill('<div class="day-num muted"></div>');
   const days = [];
 
   for (let d = 1; d <= totalDays; d++) {
-    const currentIterationDate = new Date(now.getFullYear(), now.getMonth(), d);
-    const isToday = isSameDay(currentIterationDate, now) ? "today" : "";
-    const hasEvent = myApps.some(
-      (app) =>
-        isSameDay(new Date(app.date), currentIterationDate) &&
-        app.status.toLowerCase() === "approved",
-    )
-      ? "has-event"
-      : "";
+    const day = new Date(month.getFullYear(), month.getMonth(), d);
+    const dateStr = toDateStr(day);
+    const onDay = (status) =>
+      myApps.some((app) => app.date === dateStr && app.status === status);
+    const closed =
+      pickable &&
+      (day.getDay() === 0 ||
+        day.getDay() === 6 ||
+        dateStr < min ||
+        dateStr > max);
 
-    days.push(`<div class="day-num ${isToday} ${hasEvent}">${d}</div>`);
+    const classes = [
+      isSameDay(day, now) && "today",
+      onDay("approved") && "has-event",
+      !onDay("approved") && onDay("pending") && "has-pending",
+      closed && "closed",
+      pickable && !closed && "pickable",
+      dateStr === selected && "selected",
+    ].filter(Boolean);
+
+    days.push(
+      `<div class="day-num ${classes.join(" ")}" ${
+        pickable && !closed
+          ? `data-date="${dateStr}" role="button" tabindex="0" title="Pick ${format(day, "MMM d")}"`
+          : ""
+      }>${d}</div>`,
+    );
   }
 
-  // 3. Return the Sidebar HTML string with the INLINE click dispatcher attached
+  const lastMonth = parseDate(max);
+  const atEnd =
+    month.getFullYear() * 12 + month.getMonth() >=
+    lastMonth.getFullYear() * 12 + lastMonth.getMonth();
+
+  return `
+    <div class="calendar-header">
+        ${pickable ? `<button type="button" class="cal-nav" data-step="-1" ${calendarMonthOffset <= 0 ? "disabled" : ""} aria-label="Previous month"><i class="material-icons">chevron_left</i></button>` : ""}
+        <span style="font-weight:800;">${format(month, "MMMM yyyy")}</span>
+        ${pickable ? `<button type="button" class="cal-nav" data-step="1" ${atEnd ? "disabled" : ""} aria-label="Next month"><i class="material-icons">chevron_right</i></button>` : ""}
+    </div>
+    <div class="calendar-grid">
+        <div class="day-name">S</div><div class="day-name">M</div><div class="day-name">T</div>
+        <div class="day-name">W</div><div class="day-name">T</div><div class="day-name">F</div>
+        <div class="day-name">S</div>
+        ${padding.join("")}${days.join("")}
+    </div>
+    <div class="cal-legend">
+        <span><i class="legend-dot approved"></i>Approved session</span>
+        <span><i class="legend-dot pending"></i>Pending request</span>
+        ${pickable ? `<span><i class="legend-dot closed"></i>Closed</span>` : ""}
+    </div>
+    ${pickable ? `<p class="cal-hint">Tap a day to pick it as your date.</p>` : ""}
+  `;
+}
+
+export function renderRightSidebar(myApps, { pickable = false } = {}) {
+  // The single next approved appointment
+  const nextApp = myApps
+    .filter((a) => a.status === "approved" && isUpcoming(a))
+    .sort((a, b) => appointmentStart(a) - appointmentStart(b))[0];
+
   return `
         <aside class="right-sidebar">
             <div class="next-up-card">
@@ -55,13 +272,13 @@ export function renderRightSidebar(myApps) {
                   nextApp
                     ? `
                     <div class="next-app-info">
-                        <h2>${format(new Date(nextApp.date), "MMMM dd, yyyy")}</h2>
-                        <p>${nextApp.time} | Guidance Office</p>
-                        
-                        <button class="gcal-sync-btn" 
-                                data-date="${nextApp.date}" 
-                                data-time="${nextApp.time}" 
-                                data-type="${nextApp.type || "Counseling Session"}"
+                        <h2>${formatDate(nextApp.date)}</h2>
+                        <p>${formatTime12(nextApp.time)} | ${escapeHtml(nextApp.counselorName || "Guidance Office")}</p>
+
+                        <button class="gcal-sync-btn"
+                                data-date="${nextApp.date}"
+                                data-time="${escapeHtml(nextApp.time)}"
+                                data-type="${escapeHtml(nextApp.type || "Counseling Session")}"
                                 onclick="window.handleStudentInlineSync(this)">
                           🗓️ Sync to Google Calendar
                         </button>
@@ -71,68 +288,57 @@ export function renderRightSidebar(myApps) {
                 }
             </div>
 
-            <div class="calendar-card">
-                <div class="calendar-header">
-                    <span style="font-weight:800;">${format(now, "MMMM yyyy")}</span>
-                </div>
-                <div class="calendar-grid">
-                    <div class="day-name">S</div><div class="day-name">M</div><div class="day-name">T</div>
-                    <div class="day-name">W</div><div class="day-name">T</div><div class="day-name">F</div>
-                    <div class="day-name">S</div>
-                    ${padding.join("")}${days.join("")}
-                </div>
-            </div>
+            ${
+              pickable
+                ? `<div class="calendar-card" id="bookingCalendar">
+                ${calendarInnerHtml(myApps, { pickable })}
+            </div>`
+                : `<details class="calendar-card calendar-toggle">
+                <summary><i class="material-icons">calendar_month</i>My Calendar<i class="material-icons chevron">expand_more</i></summary>
+                ${calendarInnerHtml(myApps)}
+            </details>`
+            }
 
             <div class="support-card">
                 <h4>Support</h4>
-                <p style="font-size: 0.85rem;">Office hours: 8AM - 5PM.</p>
+                <p style="font-size: 0.85rem;">Office hours: Mon–Fri, 8AM – 5PM (lunch 12–1PM).</p>
             </div>
         </aside>
     `;
 }
+
 export function renderDashboard(session = {}) {
-  // 1. Data Retrieval & Filtering
-  const appointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  const statusRank = {
+    approved: 1,
+    pending: 2,
+    completed: 3,
+  };
 
-  // Filter appointments belonging to this specific logged-in student
-  const rawMyApps = appointments.filter(
-    (a) => a.studentId === session.id || a.studentEmail === session.email,
-  );
-
-  // 2. Custom Multi-Tier Sorting for Students
-  const myApps = [...rawMyApps].sort((a, b) => {
-    const studentStatusRank = {
-      approved: 1, // Top Priority: Show confirmed active calendar schedules first
-      pending: 2, // Second Priority: Show requests currently in queue review
-      rejected: 3, // Low Priority: Historical logs
-      cancelled: 3, // Low Priority: Historical logs
-    };
-
-    const rankA = studentStatusRank[a.status.toLowerCase()] || 4;
-    const rankB = studentStatusRank[b.status.toLowerCase()] || 4;
-
-    // Sort by priority rank grouping first
-    if (rankA !== rankB) {
-      return rankA - rankB;
-    }
-
-    // Secondary Fallback: Chronological order (closest upcoming date first)
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
+  const myApps = getMyApps(session).sort((a, b) => {
+    const rankA = statusRank[a.status] || 4;
+    const rankB = statusRank[b.status] || 4;
+    if (rankA !== rankB) return rankA - rankB;
+    return appointmentStart(a) - appointmentStart(b);
   });
 
   const pendingCount = myApps.filter((a) => a.status === "pending").length;
-  const approvedCount = myApps.filter((a) => a.status === "approved").length;
+  const upcomingCount = myApps.filter(
+    (a) => a.status === "approved" && isUpcoming(a),
+  ).length;
+  const completedCount = myApps.filter((a) => a.status === "completed").length;
+  const toRate = myApps.filter((a) => getStudentActions(a).canRate).length;
 
-  // 3. Return the combined updated layout view
   return `
-        
         <div class="dashboard-wrapper">
             <div class="dashboard-main-col">
-                <div class="dashboard-hero" style="padding-top: 40px;"> 
+                <div class="dashboard-hero" style="padding-top: 40px;">
                     <span class="badge">Student Portal</span>
-                    <h1>Welcome Back, ${session.name || "Student"}!</h1>
-                    <p>You have <strong>${pendingCount}</strong> pending requests.</p>
+                    <h1>Welcome Back, ${escapeHtml(session.name || "Student")}!</h1>
+                    <p>You have <strong>${pendingCount}</strong> pending request${pendingCount === 1 ? "" : "s"}${
+                      toRate > 0
+                        ? ` and <strong>${toRate}</strong> session${toRate === 1 ? "" : "s"} to rate`
+                        : ""
+                    }.</p>
                 </div>
 
                 <div class="stats-grid-horizontal">
@@ -141,22 +347,22 @@ export function renderDashboard(session = {}) {
                         <span class="value">${myApps.length}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="label">Confirmed</span>
-                        <span class="value" style="color: #22c55e;">${approvedCount}</span>
+                        <span class="label">Upcoming</span>
+                        <span class="value" style="color: #22c55e;">${upcomingCount}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="label">Status</span>
-                        <span class="value" style="font-size: 0.9rem; color: #3b82f6;">● Active Student</span>
+                        <span class="label">Completed</span>
+                        <span class="value" style="color: #3b82f6;">${completedCount}</span>
                     </div>
                 </div>
 
                 <div class="table-card">
                     <div class="card-header-flex" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3>Recent History</h3>
+                        <h3>Recent Appointments</h3>
                         <button class="view-all-btn" onclick="document.querySelector('[data-target=records]').click()">View All</button>
                     </div>
                     <div class="table-responsive">
-                        <table>
+                        <table class="recent-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -170,53 +376,15 @@ export function renderDashboard(session = {}) {
                                   myApps
                                     .slice(0, 5)
                                     .map((app) => {
-                                      // Date evaluation checks
-                                      const appointmentDate = new Date(
-                                        app.date,
-                                      );
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      appointmentDate.setHours(0, 0, 0, 0);
-
-                                      const isPastDate =
-                                        appointmentDate < today;
-                                      const isInactiveLog =
-                                        app.status === "cancelled" ||
-                                        app.status === "rejected";
-
-                                      // Core cancellation constraints validation rule
-                                      const canCancel =
-                                        app.status === "pending" ||
-                                        (app.status === "approved" &&
-                                          !isPastDate);
-
+                                      const faded =
+                                        !ACTIVE_STATUSES.includes(app.status) ||
+                                        !isUpcoming(app);
                                       return `
-                                    <tr style="${isInactiveLog || (app.status === "approved" && isPastDate) ? "opacity: 0.55; background-color: #f8fafc;" : ""}">
-                                        <td><strong>${format(new Date(app.date), "MMMM dd, yyyy")}</strong></td>
-                                        <td>${app.type}</td>
-                                        <td><span class="status-pill ${app.status.toLowerCase()}">${app.status}</span></td>
-                                        <td style="text-align: center;">
-                                            ${
-                                              canCancel
-                                                ? `
-                                                <button class="cancel-btn-table" data-id="${app.id}" title="Cancel Appointment" style="background: none; border: none; color: #ef4444; cursor: pointer; display: inline-flex; align-items: center; padding: 4px;">
-                                                    <i class="material-icons" style="font-size: 18px;">cancel</i>
-                                                </button>
-                                            `
-                                                : `
-                                                ${
-                                                  app.status === "approved" &&
-                                                  isPastDate
-                                                    ? `
-                                                    <i class="material-icons" title="Completed Past Session" style="color: #10b981; font-size: 18px; cursor: default; vertical-align: middle;">check_circle</i>
-                                                `
-                                                    : `
-                                                    <span style="color: #94a3b8; font-size: 12px;">—</span>
-                                                `
-                                                }
-                                            `
-                                            }
-                                        </td>
+                                    <tr class="${faded ? "faded-row" : ""}">
+                                        <td data-label="Date" class="date-cell"><strong>${format(parseDate(app.date), "MMM d, yyyy")}</strong><small>${formatTime12(app.time)}</small></td>
+                                        <td data-label="Type">${escapeHtml(app.type)}<div class="row-sub">${escapeHtml(app.counselorName || "Unassigned")}</div></td>
+                                        <td data-label="Status">${statusPill(app.status)}</td>
+                                        <td data-label="Action" style="text-align: center;">${renderActionButtons(app)}</td>
                                     </tr>
                                 `;
                                     })
@@ -233,47 +401,55 @@ export function renderDashboard(session = {}) {
         </div>
     `;
 }
+
 export function renderBookingForm(session = {}) {
-  // 1. Get appointments data for the sidebar
-  const allAppointments =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const myApps = allAppointments.filter((a) => a.studentId === session.id);
+  const myApps = getMyApps(session);
+  const counselors = getCounselors();
+  const prefill = bookingPrefill || {};
+  const { min, max } = dateLimits();
 
-  // 2. Fetch global users database and filter down to available counselors
-  const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const counselors = allUsers.filter((u) => u.role === "guidance");
+  const counselorOptions = [
+    `<option value="">Select a preferred counselor...</option>`,
+    `<option value="auto" ${prefill.counselorId === "auto" ? "selected" : ""}>Any Available Counselor</option>`,
+    ...counselors.map(
+      (c) => `
+      <option value="${c.id}" ${prefill.counselorId === c.id ? "selected" : ""}>
+        ${escapeHtml(c.name)} — (${escapeHtml(c.specialty || "General Counseling")})
+      </option>`,
+    ),
+  ].join("");
 
-  // 3. Programmatically compile the HTML option elements for the dropdown menu
-  let counselorOptions = `<option value="">Select a preferred counselor...</option>`;
+  calendarMonthOffset = 0;
 
-  // Add an automated "any available" fallback choice first
-  counselorOptions += `<option value="auto">Any Available Counselor (Round-Robin)</option>`;
+  const typeOptions = [
+    `<option value="">Select a reason...</option>`,
+    ...COUNSELING_TYPES.map(
+      (t) =>
+        `<option value="${t}" ${prefill.type === t ? "selected" : ""}>${t}</option>`,
+    ),
+  ].join("");
 
-  // Append choices for all real registered guidance objects found in database
-  counselors.forEach((c) => {
-    counselorOptions += `
-      <option value="${c.id}" data-name="${c.name}">
-        ${c.name} — (${c.specialty || "General Counseling"})
-      </option>
-    `;
-  });
+  const modeOptions = SESSION_MODES.map(
+    (m) =>
+      `<option value="${m}" ${prefill.mode === m ? "selected" : ""}>${m}</option>`,
+  ).join("");
 
   return `
     <div class="dashboard-wrapper">
         <div class="dashboard-main-col">
             <div class="dashboard-hero" style="padding-top: 40px;">
                 <span class="badge">Scheduling</span>
-                <h1>Book an Appointment</h1>
-                <p>Select a date, time, and counselor that works for you.</p>
+                <h1>${prefill.counselorId ? "Book a Follow-up" : "Book an Appointment"}</h1>
+                <p>Sessions are one hour, Monday to Friday. Pick a counselor, a date, and an open time.</p>
             </div>
 
             <div class="table-card booking-container">
                 <div id="booking-error" class="error-banner hidden"></div>
-                
-                <form id="appointment-form" class="styled-form">
+
+                <form id="appointment-form" class="styled-form" novalidate>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="appCounselor">Assigned Guidance Counselor</label>
+                            <label for="appCounselor">Guidance Counselor</label>
                             <select id="appCounselor" required>
                                 ${counselorOptions}
                             </select>
@@ -284,31 +460,56 @@ export function renderBookingForm(session = {}) {
                         <div class="form-group">
                             <label for="appType">Counseling Type</label>
                             <select id="appType" required>
-                                <option value="">Select a reason...</option>
-                                <option value="Academic Guidance">Academic Guidance</option>
-                                <option value="Personal Concern">Personal Concern</option>
-                                <option value="Career Consultation">Career Consultation</option>
+                                ${typeOptions}
                             </select>
                         </div>
                     </div>
 
-                    <div class="form-row flex-row">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="appMode">Session Mode</label>
+                            <select id="appMode">
+                                ${modeOptions}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group">
                             <label for="appDate">Preferred Date</label>
-                            <input type="date" id="appDate" required min="${new Date().toISOString().split("T")[0]}">
-                        </div>
-                        <div class="form-group">
-                            <label for="appTime">Preferred Time</label>
-                            <input type="time" id="appTime" required>
+                            <input type="date" id="appDate" class="date-field empty" min="${min}" max="${max}">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <div class="form-group">
-                            <label for="appNotes">Additional Notes (Optional)</label>
-                            <textarea id="appNotes" rows="4" placeholder="Briefly describe your concern..."></textarea>
-                        </div>
+                        <label>Available Times</label>
+                        <input type="hidden" id="appTime">
+                        <div id="slotPicker">${slotPickerHtml("", parseCounselorValue(String(prefill.counselorId || "")))}</div>
                     </div>
+
+                    <div class="form-group">
+                        <label for="appNotes" id="appNotesLabel">Additional Notes (Optional)</label>
+                        <textarea id="appNotes" rows="4" placeholder="Briefly describe your concern..."></textarea>
+                    </div>
+
+                    <label class="urgent-toggle">
+                        <input type="checkbox" id="appUrgent">
+                        <span>This is urgent — I need to talk to someone as soon as possible</span>
+                    </label>
+                    <div id="urgentHelp" class="urgent-help hidden">
+                        <strong>If you are in danger or thinking of hurting yourself, don't wait for an appointment.</strong>
+                        <ul>
+                            <li>NCMH Crisis Hotline: <a href="tel:1553">1553</a> (toll-free) or <a href="tel:09178998727">0917 899 8727</a></li>
+                            <li>Emergency: <a href="tel:911">911</a></li>
+                            <li>Or go straight to the guidance office — you don't need an appointment.</li>
+                        </ul>
+                        Urgent requests are shown first in the counselor's queue.
+                    </div>
+
+                    <p class="privacy-note">
+                        <i class="material-icons">lock</i>
+                        <span>Only the guidance counselors can see what you write here. It stays confidential unless someone's safety is at risk.</span>
+                    </p>
 
                     <div class="form-actions">
                         <button type="submit" id="submitBooking" class="primary-btn">
@@ -319,25 +520,48 @@ export function renderBookingForm(session = {}) {
             </div>
         </div>
 
-        ${renderRightSidebar(myApps)}
+        ${renderRightSidebar(myApps, { pickable: true })}
     </div>
   `;
 }
-export function renderHistory(session = {}) {
-  // 1. Data Retrieval
-  const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const myApps = allApps.filter((app) => app.studentEmail === session.email);
 
-  // 2. Sort by ID (assuming higher ID = newer)
-  const sortedApps = [...myApps].sort((a, b) => b.id - a.id);
+export function renderHistory(session = {}) {
+  const sortedApps = getMyApps(session).sort(
+    (a, b) => appointmentStart(b) - appointmentStart(a),
+  );
+
+  const detailLines = (app) => {
+    const lines = [];
+    if (app.rescheduledFrom) {
+      lines.push(
+        `<span class="history-note"><i class="material-icons">event_repeat</i> Moved from ${formatDate(app.rescheduledFrom.date)}, ${formatTime12(app.rescheduledFrom.time)}</span>`,
+      );
+    }
+    if (app.counselorNotes) {
+      lines.push(
+        `<span class="history-note"><i class="material-icons">chat</i> Counselor: ${escapeHtml(app.counselorNotes)}</span>`,
+      );
+    }
+    if (app.followUp && app.status === "completed") {
+      lines.push(
+        `<span class="history-note accent"><i class="material-icons">event_available</i> Your counselor recommends a follow-up session.</span>`,
+      );
+    }
+    if (app.feedback) {
+      lines.push(
+        `<span class="history-note"><span class="stars">${stars(app.feedback.rating)}</span> Your rating${app.feedback.comment ? `: ${escapeHtml(app.feedback.comment)}` : ""}</span>`,
+      );
+    }
+    return lines.join("");
+  };
 
   return `
         <div class="dashboard-wrapper">
             <div class="dashboard-main-col">
-                <div class="dashboard-hero" style="padding-top: 40px;"> 
+                <div class="dashboard-hero" style="padding-top: 40px;">
                     <span class="badge">Records</span>
                     <h1>Appointment History</h1>
-                    <p>Track and manage your past and upcoming guidance requests.</p>
+                    <p>Track, reschedule, and rate your guidance sessions.</p>
                 </div>
 
                 <div class="table-card history-container">
@@ -347,18 +571,20 @@ export function renderHistory(session = {}) {
                             ? sortedApps
                                 .map(
                                   (app) => `
-                            <div class="history-item ${app.status.toLowerCase()}">
+                            <div class="history-item ${escapeHtml(app.status)}">
                                 <div class="history-main">
                                     <div class="history-icon">
                                         <i class="material-icons">${getStatusIcon(app.status)}</i>
                                     </div>
                                     <div class="history-info">
-                                        <span class="app-type">${app.type}</span>
-                                        <span class="app-date">${format(new Date(app.date), "MMMM dd, yyyy")} • ${app.time}</span>
+                                        <span class="app-type">${escapeHtml(app.type)}</span>
+                                        <span class="app-date">${formatDate(app.date)} • ${formatTime12(app.time)} • ${escapeHtml(app.counselorName || "Unassigned")}</span>
+                                        ${detailLines(app)}
                                     </div>
                                 </div>
                                 <div class="history-status">
-                                    <span class="status-badge">${app.status.toUpperCase()}</span>
+                                    ${statusPill(app.status)}
+                                    ${renderActionButtons(app)}
                                 </div>
                             </div>
                         `,
@@ -375,7 +601,7 @@ export function renderHistory(session = {}) {
                 </div>
             </div>
 
-            ${renderRightSidebar(myApps)}
+            ${renderRightSidebar(sortedApps)}
         </div>
     `;
 }
@@ -388,20 +614,20 @@ export function renderSettings(container, session) {
         <form id="settingsForm" class="settings-form">
             <div class="input-wrapper plain">
                 <label>Full Name</label>
-                <input type="text" id="setName" value="${session.name || ""}" required>
+                <input type="text" id="setName" value="${escapeHtml(session.name)}" required>
             </div>
             <div class="input-wrapper plain">
                 <label>Email Address</label>
-                <input type="email" id="setEmail" value="${session.email || ""}" required>
+                <input type="email" id="setEmail" value="${escapeHtml(session.email)}" required>
             </div>
             <div class="input-group-row" style="display: flex; gap: 16px; margin-bottom: 20px;">
                  <div class="input-wrapper plain" style="flex: 1;">
                     <label>Course</label>
-                    <input type="text" id="setCourse" value="${session.course || ""}" placeholder="e.g. BSIT" required>
+                    <input type="text" id="setCourse" value="${escapeHtml(session.course)}" placeholder="e.g. BSIT" required>
                 </div>
                 <div class="input-wrapper plain" style="flex: 1;">
                     <label>Section</label>
-                    <input type="text" id="setSection" value="${session.section || ""}" placeholder="e.g. 1A" required>
+                    <input type="text" id="setSection" value="${escapeHtml(session.section)}" placeholder="e.g. 1A" required>
                 </div>
             </div>
             <button type="submit" class="primary-btn">
@@ -435,9 +661,22 @@ export function renderSettings(container, session) {
       users[userIndex] = { ...users[userIndex], ...updatedData };
       localStorage.setItem("gh_users", JSON.stringify(users));
 
-      // Update Active Session state parameters
+      // Keep the student's name/email on their existing appointments in sync
+      const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
+      const syncedApps = apps.map((a) =>
+        a.studentId === session.id
+          ? {
+              ...a,
+              studentName: updatedData.name,
+              studentEmail: updatedData.email,
+            }
+          : a,
+      );
+      localStorage.setItem("gh_appointments", JSON.stringify(syncedApps));
+
+      // Update Active Session state parameters (the session lives in sessionStorage)
       const newSession = { ...session, ...updatedData };
-      localStorage.setItem("gh_session", JSON.stringify(newSession));
+      sessionStorage.setItem("gh_session", JSON.stringify(newSession));
 
       alert("Profile updated successfully!");
 
@@ -450,269 +689,531 @@ export function renderSettings(container, session) {
     }
   };
 }
+
 function getStatusIcon(status) {
-  switch (status.toLowerCase()) {
+  switch (status) {
     case "approved":
-      return "check_circle";
+      return "event_available";
     case "pending":
       return "schedule";
     case "rejected":
+      return "block";
+    case "cancelled":
       return "cancel";
+    case "completed":
+      return "check_circle";
+    case "no-show":
+      return "person_off";
     default:
       return "event";
   }
 }
+
 // --- LOGIC FUNCTIONS ---
+
+// Sends the shared EmailJS template to the appointment's counselor(s)
+function emailCounselors(app, { subject, header, message, status }) {
+  const targets = getCounselorTargets(app);
+  if (!targets.emails) return Promise.resolve();
+  return emailjs.send(EMAIL_SERVICE, EMAIL_TEMPLATE, {
+    subject_line: subject,
+    to_email: targets.emails,
+    recipient_name: targets.name,
+    header_title: header,
+    main_message: message,
+    app_type: app.type,
+    app_date: app.date,
+    app_time: formatTime12(app.time),
+    status,
+    notes: app.notes || "No notes provided by student.",
+  });
+}
+
+function hasOtherActiveOnDate(session, date, ignoreAppId = null) {
+  return getAppointments().some(
+    (a) =>
+      a.id !== ignoreAppId &&
+      a.studentId === session.id &&
+      a.date === date &&
+      ACTIVE_STATUSES.includes(a.status),
+  );
+}
 
 function attachBookingListener(session) {
   const form = document.getElementById("appointment-form");
   if (!form) return;
 
+  const counselorSelect = document.getElementById("appCounselor");
+  const dateInput = document.getElementById("appDate");
+  const timeInput = document.getElementById("appTime");
+  const slotBox = document.getElementById("slotPicker");
+  const errorBanner = document.getElementById("booking-error");
+
+  const showError = (msg) => {
+    errorBanner.textContent = msg;
+    errorBanner.classList.remove("hidden");
+    errorBanner.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const refreshSlots = () => {
+    const keep = timeInput.value;
+    const html = slotPickerHtml(
+      dateInput.value,
+      parseCounselorValue(counselorSelect.value),
+      keep,
+    );
+    slotBox.innerHTML = html;
+    // Drop the chosen time if it is no longer offered
+    if (!slotBox.querySelector(`.slot-btn.selected:not([disabled])`)) {
+      timeInput.value = "";
+    }
+  };
+
+  // Right-hand calendar: tap a day to fill Preferred Date
+  const calendarBox = document.getElementById("bookingCalendar");
+  const redrawCalendar = () => {
+    if (!calendarBox) return;
+    calendarBox.innerHTML = calendarInnerHtml(getMyApps(session), {
+      pickable: true,
+      selected: dateInput.value,
+    });
+  };
+  // Grey text while empty, red border when the date can't be booked
+  const styleDateField = () => {
+    dateInput.classList.toggle("empty", !dateInput.value);
+    dateInput.classList.toggle(
+      "has-error",
+      Boolean(
+        dateInput.value &&
+          checkDate(dateInput.value, parseCounselorValue(counselorSelect.value)),
+      ),
+    );
+  };
+  const pickDate = (date) => {
+    dateInput.value = date;
+    styleDateField();
+    refreshSlots();
+    redrawCalendar();
+  };
+  // Open the browser's date picker when anywhere in the box is clicked
+  dateInput.onclick = () => {
+    try {
+      dateInput.showPicker?.();
+    } catch {
+      // Older browsers: the built-in calendar icon still works
+    }
+  };
+  if (calendarBox) {
+    calendarBox.onclick = (e) => {
+      const nav = e.target.closest(".cal-nav:not([disabled])");
+      if (nav) {
+        calendarMonthOffset += Number(nav.dataset.step);
+        redrawCalendar();
+        return;
+      }
+      const day = e.target.closest(".day-num[data-date]");
+      if (day) pickDate(day.dataset.date);
+    };
+    calendarBox.onkeydown = (e) => {
+      const day = e.target.closest(".day-num[data-date]");
+      if (day && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        pickDate(day.dataset.date);
+      }
+    };
+  }
+
+  const typeSelect = document.getElementById("appType");
+  const notesInput = document.getElementById("appNotes");
+  const notesLabel = document.getElementById("appNotesLabel");
+  const updateNotesLabel = () => {
+    const isOther = typeSelect.value === "Other";
+    notesLabel.textContent = isOther
+      ? "Describe your concern (Required)"
+      : "Additional Notes (Optional)";
+    notesInput.placeholder = isOther
+      ? "Tell us what you'd like to talk about..."
+      : "Briefly describe your concern...";
+  };
+  typeSelect.onchange = updateNotesLabel;
+
+  const urgentInput = document.getElementById("appUrgent");
+  urgentInput.onchange = () => {
+    document
+      .getElementById("urgentHelp")
+      .classList.toggle("hidden", !urgentInput.checked);
+  };
+
+  refreshBookingSlots = () => {
+    refreshSlots();
+    redrawCalendar();
+  };
+  bookingPrefill = null;
+  bindSlotPicker(slotBox, timeInput);
+  counselorSelect.onchange = () => {
+    styleDateField();
+    refreshSlots();
+  };
+  dateInput.onchange = () => {
+    styleDateField();
+    // Show the typed date's month on the calendar
+    if (dateInput.value) {
+      const picked = parseDate(dateInput.value);
+      const now = new Date();
+      calendarMonthOffset = Math.max(
+        0,
+        (picked.getFullYear() - now.getFullYear()) * 12 +
+          picked.getMonth() -
+          now.getMonth(),
+      );
+    }
+    refreshSlots();
+    redrawCalendar();
+  };
+
   form.onsubmit = (e) => {
     e.preventDefault();
-    
-    // Get values from form
-    const counselorSelect = document.getElementById("appCounselor");
-    const dateVal = document.getElementById("appDate").value;
-    
-    // --- NEW: DUPLICATE PREVENTION LOGIC ---
-    const allApps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-    
-    const isDuplicate = allApps.some(app => 
-      app.studentId === session.id && 
-      app.date === dateVal && 
-      app.status !== "rejected" // Allows re-booking if previous attempt was rejected
-    );
+    errorBanner.classList.add("hidden");
 
-    if (isDuplicate) {
-      alert("You already have an appointment request pending or approved for this date.");
-      return; // Stop the function here, do not proceed to save or email
+    const counselorKey = parseCounselorValue(counselorSelect.value);
+    const type = typeSelect.value;
+    const date = dateInput.value;
+    const time = timeInput.value;
+    const notes = notesInput.value.trim();
+
+    if (!counselorKey) return showError("Please choose a counselor.");
+    if (!type) return showError("Please choose a counseling type.");
+    if (type === "Other" && !notes) {
+      return showError("Please describe your concern in the notes box.");
     }
-    // ---------------------------------------
+    const dateProblem = checkDate(date, counselorKey);
+    if (dateProblem) return showError(dateProblem);
+    if (!time) return showError("Please pick one of the open times.");
 
-    const submitBtn = document.getElementById("submitBooking");
-    const selectedOption = counselorSelect.options[counselorSelect.selectedIndex];
-    const isAutoAssign = counselorSelect.value === "auto";
+    if (hasOtherActiveOnDate(session, date)) {
+      return showError(
+        "You already have a pending or approved appointment on this date. Reschedule that one instead.",
+      );
+    }
+
+    // Re-check the slot: another student may have taken it a moment ago
+    let counselor = null;
+    if (counselorKey === "auto") {
+      counselor = autoAssignCounselor(date, time);
+    } else if (isCounselorFree(counselorKey, date, time)) {
+      counselor = getCounselors().find((c) => c.id === counselorKey);
+    }
+    if (!counselor) {
+      refreshSlots();
+      return showError("That time was just taken. Please pick another one.");
+    }
 
     const newApp = {
       id: Date.now(),
       studentId: session.id,
       studentName: session.name,
       studentEmail: session.email,
-      counselorId: isAutoAssign ? null : parseInt(counselorSelect.value, 10),
-      counselorName: isAutoAssign ? "Unassigned (Auto)" : selectedOption.getAttribute("data-name"),
-      type: document.getElementById("appType").value,
-      date: dateVal, // Use the variable defined above
-      time: document.getElementById("appTime").value,
-      notes: document.getElementById("appNotes").value,
+      counselorId: counselor.id,
+      counselorName: counselor.name,
+      type,
+      mode: document.getElementById("appMode").value,
+      urgent: urgentInput.checked,
+      date,
+      time,
+      notes,
       status: "pending",
       counselorNotes: "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    const submitBtn = document.getElementById("submitBooking");
     submitBtn.innerText = "Sending...";
     submitBtn.disabled = true;
 
-    // 1. Save to LocalStorage
-    allApps.push(newApp);
-    localStorage.setItem("gh_appointments", JSON.stringify(allApps));
+    saveAppointments([...getAppointments(), newApp]);
+    const urgentTag = newApp.urgent ? "URGENT: " : "";
+    notifyCounselors(
+      newApp,
+      `${urgentTag}New ${newApp.type} request (${newApp.mode}) from ${session.name} for ${formatDate(date)}, ${formatTime12(time)}.`,
+    );
+    window.logActivity(
+      session,
+      `Booked ${newApp.type} with ${counselor.name} for ${date} ${formatTime12(time)}`,
+    );
 
-    // 2. Resolve target email routes
-    const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-    let targetEmails = "";
-    let recipientName = "Guidance Team";
-
-    if (isAutoAssign) {
-      targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
-    } else {
-      const chosenCounselor = users.find((u) => u.id === newApp.counselorId);
-      if (chosenCounselor) {
-        targetEmails = chosenCounselor.email;
-        recipientName = chosenCounselor.name;
-      } else {
-        targetEmails = users.filter((u) => u.role === "guidance").map((u) => u.email).join(",");
-      }
-    }
-
-    // 3. Send via EmailJS
-    emailjs.send("service_mtv9cbi", "template_mublumh", {
-        subject_line: `New Appointment Request - ${session.name}`,
-        to_email: targetEmails,
-        recipient_name: recipientName,
-        header_title: "New Appointment Request",
-        main_message: `A new appointment request has been submitted by ${session.name} and assigned to ${newApp.counselorName}.`,
-        app_type: newApp.type,
-        app_date: newApp.date,
-        app_time: newApp.time,
-        status: "Pending",
-        notes: newApp.notes || "No notes provided by student.",
+    let emailOk = true;
+    emailCounselors(newApp, {
+      subject: `${urgentTag}New Appointment Request - ${session.name}`,
+      header: `${urgentTag}New Appointment Request`,
+      message: `A new ${newApp.mode} appointment request has been submitted by ${session.name} and assigned to ${counselor.name}.`,
+      status: "Pending",
     })
-    .then(() => {
-      window.logActivity(session, `Booked an appointment for ${newApp.date}`);
-        alert(`Success! Appointment booked. ${isAutoAssign ? "Guidance Team" : recipientName} has been notified.`);
-        window.location.reload();
-    })
-    .catch((err) => {
+      .catch((err) => {
         console.error("EmailJS Detailed Error:", err);
-        alert(`Email Error: ${err.text}. Booking saved locally.`);
-        window.location.reload();
-    });
+        emailOk = false;
+      })
+      .finally(() => {
+        goTo("dashboard");
+        showBookingSummary(newApp, emailOk);
+      });
   };
 }
-export function attachCancelListeners() {
-  const container = document.getElementById("app");
-  if (!container) return;
 
-  container.addEventListener("click", (e) => {
-    const cancelBtn = e.target.closest(".cancel-btn-table");
-    if (!cancelBtn) return;
-
-    const appId = parseInt(cancelBtn.dataset.id, 10);
-
-    showCustomConfirmModal({
-      title: "Cancel Appointment",
-      message:
-        "Are you sure you want to cancel this counseling appointment request? This action cannot be undone.",
-      onConfirm: () => {
-        // 1. Fetch current datasets
-        const allApps =
-          JSON.parse(localStorage.getItem("gh_appointments")) || [];
-
-        let targetApp = null;
-
-        // 2. Locate and modify the target state values
-        const updatedApps = allApps.map((app) => {
-          if (app.id === appId) {
-            targetApp = {
-              ...app,
-              status: "cancelled",
-              updatedAt: new Date().toISOString(),
-            };
-            return targetApp;
-          }
-          return app;
-        });
-
-        // 3. Commit mutations back down to local disk
-        localStorage.setItem("gh_appointments", JSON.stringify(updatedApps));
-
-        // 4. Send automatic EmailJS alert to the counselor before refreshing
-        if (targetApp) {
-          notifyCounselorOfCancellation(targetApp);
-        } else {
-          // If fallback is required due to synchronous timing issues
-          window.location.reload();
-        }
-      },
-    });
+// Confirmation shown after a booking is saved
+function showBookingSummary(app, emailOk) {
+  openModal({
+    title: "Request Sent",
+    icon: "check_circle",
+    cancelText: "Done",
+    bodyHtml: `
+      <p class="modal-lead"><strong>${escapeHtml(app.type)}</strong>${app.urgent ? ' <span class="urgent-tag">Urgent</span>' : ""}<br>
+      ${formatDate(app.date)}, ${formatTime12(app.time)}<br>
+      ${escapeHtml(app.counselorName)} · ${escapeHtml(app.mode)}</p>
+      <p>Your request is <strong>pending</strong>. You'll get a notification when ${escapeHtml(app.counselorName)} approves it.
+      You can reschedule or cancel it from your Dashboard.</p>
+      ${emailOk ? "" : '<p class="slot-hint warn">The email to your counselor failed, but they will still see your request in their portal.</p>'}
+    `,
   });
 }
 
-// --- EmailJS Counselor Cancellation Notification Engine ---
-function notifyCounselorOfCancellation(appointment) {
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-  let targetEmails = "";
-  let recipientName = "Guidance Team";
+function openCancelDialog(session, app) {
+  openModal({
+    title: "Cancel Appointment",
+    icon: "warning",
+    danger: true,
+    cancelText: "Keep Appointment",
+    confirmText: "Yes, Cancel It",
+    bodyHtml: `<p>Cancel your ${escapeHtml(app.type)} session on <strong>${formatDate(app.date)}, ${formatTime12(app.time)}</strong>? This can't be undone.</p>`,
+    onConfirm: () => {
+      const updated = updateAppointment(app.id, { status: "cancelled" });
+      notifyCounselors(
+        updated,
+        `${session.name} cancelled their ${updated.type} session on ${formatDate(updated.date)}, ${formatTime12(updated.time)}.`,
+      );
+      window.logActivity(
+        session,
+        `Cancelled appointment on ${updated.date} ${formatTime12(updated.time)}`,
+      );
+      emailCounselors(updated, {
+        subject: `Cancellation Alert: Appointment Cancelled by ${session.name}`,
+        header: "Appointment Cancelled By Student",
+        message: `The following appointment has been cancelled by ${session.name}.`,
+        status: "Cancelled",
+      }).catch((err) => {
+        console.error("EmailJS Cancellation Error:", err);
+        alert(
+          "Cancelled, but the email to your counselor failed. They will still see it in their portal.",
+        );
+      });
+      rerenderCurrentView(session);
+    },
+  });
+}
 
-  // 1. Resolve where this email should go based on counselor assignment
-  if (appointment.counselorId) {
-    const chosenCounselor = users.find((u) => u.id === appointment.counselorId);
-    if (chosenCounselor) {
-      targetEmails = chosenCounselor.email;
-      recipientName = chosenCounselor.name;
+function openRescheduleDialog(session, app) {
+  const { min, max } = dateLimits();
+  const counselorKey = app.counselorId ?? "auto";
+
+  openModal({
+    title: "Reschedule Appointment",
+    icon: "event_repeat",
+    confirmText: "Send Request",
+    bodyHtml: `
+      <p class="modal-lead">Currently <strong>${formatDate(app.date)}, ${formatTime12(app.time)}</strong> with ${escapeHtml(app.counselorName || "any counselor")}.
+      ${app.status === "approved" ? "Your counselor will need to approve the new time." : ""}</p>
+      <label class="modal-label" for="rsDate">New date</label>
+      <input type="date" id="rsDate" class="modal-input" min="${min}" max="${max}" value="${app.date}">
+      <label class="modal-label">New time</label>
+      <input type="hidden" id="rsTime">
+      <div id="rsSlots"></div>
+      <label class="modal-label" for="rsReason">Reason (optional)</label>
+      <textarea id="rsReason" class="modal-input" rows="2" placeholder="e.g. Exam schedule conflict"></textarea>
+    `,
+    onOpen: ({ card }) => {
+      const dateInput = card.querySelector("#rsDate");
+      const timeInput = card.querySelector("#rsTime");
+      const slotBox = card.querySelector("#rsSlots");
+      const refresh = () => {
+        timeInput.value = "";
+        slotBox.innerHTML = slotPickerHtml(
+          dateInput.value,
+          counselorKey,
+          "",
+          app.id,
+        );
+      };
+      bindSlotPicker(slotBox, timeInput);
+      dateInput.onchange = refresh;
+      refresh();
+    },
+    onConfirm: ({ card, showError }) => {
+      const date = card.querySelector("#rsDate").value;
+      const time = card.querySelector("#rsTime").value;
+      const reason = card.querySelector("#rsReason").value.trim();
+
+      const dateProblem = checkDate(date, counselorKey);
+      if (dateProblem) {
+        showError(dateProblem);
+        return false;
+      }
+      if (!time) {
+        showError("Please pick one of the open times.");
+        return false;
+      }
+      if (date === app.date && time === app.time) {
+        showError("Pick a different date or time.");
+        return false;
+      }
+      if (hasOtherActiveOnDate(session, date, app.id)) {
+        showError("You already have another appointment on that date.");
+        return false;
+      }
+
+      let counselor = null;
+      if (counselorKey === "auto") {
+        counselor = autoAssignCounselor(date, time);
+      } else if (isCounselorFree(counselorKey, date, time, app.id)) {
+        counselor = { id: app.counselorId, name: app.counselorName };
+      }
+      if (!counselor) {
+        showError("That time was just taken. Please pick another one.");
+        return false;
+      }
+
+      const updated = updateAppointment(app.id, {
+        date,
+        time,
+        status: "pending",
+        counselorId: counselor.id,
+        counselorName: counselor.name,
+        rescheduledFrom: { date: app.date, time: app.time },
+        rescheduleReason: reason,
+        counselorNotes: "",
+      });
+
+      notifyCounselors(
+        updated,
+        `${session.name} asked to move their ${updated.type} session from ${formatDate(app.date)}, ${formatTime12(app.time)} to ${formatDate(date)}, ${formatTime12(time)}.`,
+      );
+      window.logActivity(
+        session,
+        `Requested reschedule from ${app.date} ${formatTime12(app.time)} to ${date} ${formatTime12(time)}`,
+      );
+      emailCounselors(updated, {
+        subject: `Reschedule Request - ${session.name}`,
+        header: "Appointment Reschedule Request",
+        message: `${session.name} asked to move their session from ${formatDate(app.date)}, ${formatTime12(app.time)} to the time below.${reason ? ` Reason: ${reason}` : ""}`,
+        status: "Pending (rescheduled)",
+      }).catch((err) => console.error("EmailJS Reschedule Error:", err));
+
+      rerenderCurrentView(session);
+      return true;
+    },
+  });
+}
+
+function openRatingDialog(session, app) {
+  openModal({
+    title: "Rate Your Session",
+    icon: "star_rate",
+    confirmText: "Submit Rating",
+    bodyHtml: `
+      <p class="modal-lead">How helpful was your ${escapeHtml(app.type)} session with ${escapeHtml(app.counselorName || "your counselor")} on ${formatDate(app.date)}?</p>
+      <input type="hidden" id="rateValue">
+      <div class="star-picker" role="radiogroup" aria-label="Rating">
+        ${[1, 2, 3, 4, 5]
+          .map(
+            (n) =>
+              `<button type="button" class="star-btn" data-value="${n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`,
+          )
+          .join("")}
+      </div>
+      <label class="modal-label" for="rateComment">Comment (optional)</label>
+      <textarea id="rateComment" class="modal-input" rows="3" placeholder="What went well? What could be better?"></textarea>
+      <p class="modal-hint">Your rating is shared with the guidance office to improve its services.</p>
+    `,
+    onOpen: ({ card }) => {
+      const picker = card.querySelector(".star-picker");
+      const valueInput = card.querySelector("#rateValue");
+      picker.onclick = (e) => {
+        const btn = e.target.closest(".star-btn");
+        if (!btn) return;
+        valueInput.value = btn.dataset.value;
+        picker.querySelectorAll(".star-btn").forEach((b) => {
+          b.classList.toggle(
+            "on",
+            Number(b.dataset.value) <= Number(btn.dataset.value),
+          );
+        });
+      };
+    },
+    onConfirm: ({ card, showError }) => {
+      const rating = Number(card.querySelector("#rateValue").value);
+      if (!rating) {
+        showError("Please choose from 1 to 5 stars.");
+        return false;
+      }
+      const comment = card.querySelector("#rateComment").value.trim();
+
+      updateAppointment(app.id, {
+        feedback: { rating, comment, at: new Date().toISOString() },
+      });
+      notifyCounselors(
+        app,
+        `${session.name} rated their ${app.type} session ${rating}/5.`,
+      );
+      window.logActivity(session, `Rated session on ${app.date}: ${rating}/5`);
+      rerenderCurrentView(session);
+      return true;
+    },
+  });
+}
+
+// One delegated click handler for every appointment action button
+export function attachAppointmentActions(session) {
+  const container = document.getElementById("app");
+  if (!container) return;
+
+  // Assign (not add) so re-rendering never stacks duplicate handlers
+  container.onclick = (e) => {
+    const btn = e.target.closest(
+      ".cancel-btn-table, .reschedule-btn, .rate-btn, .followup-btn",
+    );
+    if (!btn) return;
+
+    const app = getAppointments().find((a) => a.id === Number(btn.dataset.id));
+    if (!app) return;
+
+    if (btn.classList.contains("cancel-btn-table"))
+      openCancelDialog(session, app);
+    else if (btn.classList.contains("reschedule-btn"))
+      openRescheduleDialog(session, app);
+    else if (btn.classList.contains("rate-btn")) openRatingDialog(session, app);
+    else if (btn.classList.contains("followup-btn")) {
+      bookingPrefill = {
+        counselorId: app.counselorId || "auto",
+        type: app.type,
+        mode: app.mode,
+      };
+      goTo("book");
     }
-  }
-
-  // 2. Fallback: If no specific counselor was assigned, email the entire guidance team
-  if (!targetEmails) {
-    targetEmails = users
-      .filter((u) => u.role === "guidance")
-      .map((u) => u.email)
-      .join(",");
-  }
-
-  // 3. Dispatch data object payload via EmailJS
-  emailjs
-    .send("service_mtv9cbi", "template_mublumh", {
-      subject_line: `Cancellation Alert: Appointment Cancelled by ${appointment.studentName}`,
-      to_email: targetEmails,
-      recipient_name: recipientName,
-
-      // Dynamic Display Text Card Configurations
-      header_title: "Appointment Cancelled By Student",
-      main_message: `Please look over your schedule logs. The following appointment slot has been officially cancelled by ${appointment.studentName}.`,
-
-      // Table Details Layout Mapping
-      app_type: appointment.type,
-      app_date: appointment.date,
-      app_time: appointment.time,
-      status: "Cancelled",
-
-      // Fallback description handling
-      notes: appointment.notes || "No additional comments left by student.",
-    })
-    .then((res) => {
-      console.log(
-        "Cancellation Email Sent Successfully!",
-        res.status,
-        res.text,
-      );
-      alert(
-        "Appointment successfully cancelled. The counselor has been notified via email.",
-      );
-      window.location.reload(); // Refresh viewport layout after successful email handshake
-    })
-    .catch((err) => {
-      console.error("EmailJS Cancellation Error:", err);
-      alert(
-        `Cancelled locally, but failed to alert counselor via email (Code: ${err.status}).`,
-      );
-      window.location.reload(); // Refresh anyway so the dashboard stays accurate locally
-    });
-}
-
-// --- PRIVATE MODAL UI HELPER ---
-function showCustomConfirmModal({ title, message, onConfirm }) {
-  // Create a overlay wrapper element block
-  const modalOverlay = document.createElement("div");
-  modalOverlay.className = "custom-modal-overlay";
-
-  // Inject clean HTML template structural layout
-  modalOverlay.innerHTML = `
-    <div class="custom-modal-card">
-      <div class="custom-modal-header">
-        <i class="material-icons error-icon">warning</i>
-        <h3>${title}</h3>
-      </div>
-      <div class="custom-modal-body">
-        <p>${message}</p>
-      </div>
-      <div class="custom-modal-actions">
-        <button type="button" class="modal-btn secondary-btn" id="modal-cancel-action">Keep Appointment</button>
-        <button type="button" class="modal-btn danger-btn" id="modal-confirm-action">Yes, Cancel It</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modalOverlay);
-
-  // Focus trap lifecycle configuration handlers
-  const confirmBtn = modalOverlay.querySelector("#modal-confirm-action");
-  const cancelBtn = modalOverlay.querySelector("#modal-cancel-action");
-
-  const closeModal = () => modalOverlay.remove();
-
-  confirmBtn.onclick = () => {
-    closeModal();
-    onConfirm();
-  };
-
-  cancelBtn.onclick = closeModal;
-  modalOverlay.onclick = (e) => {
-    if (e.target === modalOverlay) closeModal();
   };
 }
+
+// Redraw whichever tab is open (dashboard, history or booking)
+function rerenderCurrentView(session) {
+  const content = document.getElementById("dynamic-content");
+  const target = document
+    .querySelector(".nav-item.active")
+    ?.getAttribute("data-target");
+  if (!content) return;
+
+  if (target === "dashboard") content.innerHTML = renderDashboard(session);
+  else if (target === "records") content.innerHTML = renderHistory(session);
+  else if (target === "book" && refreshBookingSlots) refreshBookingSlots();
+}
+
 // --- GLOBAL WINDOW GCAL INTERCEPT HANDLER ---
 window.handleStudentInlineSync = async (btn) => {
   if (btn.disabled) return;
@@ -827,7 +1328,7 @@ export function renderStudentView(root, session, onLogout) {
                 <button class="nav-item" data-target="settings">
                     <i class="material-icons">settings</i> Settings
                 </button>
-                
+
                 <button class="nav-item ai-chat-trigger" id="openAiChatBtn" style="color: #3b82f6; font-weight: 600; margin-top: auto;">
                     <i class="material-icons">psychology</i> Ask Granby AI
                 </button>
@@ -838,11 +1339,17 @@ export function renderStudentView(root, session, onLogout) {
             </nav>
         </aside>
         <main class="content-area" style="padding: 40px; box-sizing: border-box; flex: 1;">
-            
+            <div class="portal-topbar">
+                <button type="button" id="mobileMenuBtn" class="hamburger-btn" aria-label="Open menu">
+                    <i class="material-icons">menu</i>
+                </button>
+                ${renderBellHtml()}
+            </div>
+            <div id="broadcast-slot">${renderBroadcastBanner()}</div>
             <section id="dynamic-content">${renderDashboard(session)}</section>
         </main>
 
-        <div id="floating-ai-chatbox" class="chatbox-window hidden" style="position: fixed; bottom: 20px; right: 20px; width: 360px; height: 460px; background: #ffffff; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 9999; overflow: hidden; transition: all 0.25s ease-in-out;">
+        <div id="floating-ai-chatbox" class="chatbox-window hidden" style="position: fixed; bottom: 20px; right: 20px; width: 360px; max-width: calc(100vw - 32px); height: 460px; background: #ffffff; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 9999; overflow: hidden; transition: all 0.25s ease-in-out;">
             <div style="background: #3b82f6; color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; user-select: none;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <i class="material-icons">psychology</i>
@@ -852,7 +1359,7 @@ export function renderStudentView(root, session, onLogout) {
                     <i class="material-icons" style="font-size: 20px;">remove</i>
                 </button>
             </div>
-            
+
             <div id="chatbox-messages-viewport" style="flex: 1; padding: 16px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem;">
                 <div style="background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5;">
                     👋 Hello! I am your virtual campus helper. Ask me anything about shifting schedules, dropping documents, or getting ready for counseling!
@@ -870,27 +1377,15 @@ export function renderStudentView(root, session, onLogout) {
   `;
 
   setupStudentListeners(onLogout, session);
-  attachCancelListeners();
+  attachAppointmentActions(session);
+  setupBell(session.id);
   initializeFloatingChatboxEngine();
 
   listenForRealTimeUpdates(() => {
-    const content = document.getElementById("dynamic-content");
-    const activeNav = document.querySelector(".nav-item.active");
-
-    // 1. Dashboard Routing & Persistence Guard
-    if (!activeNav || activeNav.getAttribute("data-target") !== "dashboard") {
-      // If not on dashboard, ensure the banner slot is empty to save space/distraction
-
-      return;
-    }
-
-    console.log("Synchronizing student dashboard metrics...");
-
-    // 2. Structural Guard: Draw dashboard shell ONCE
-    if (content && !content.querySelector(".dashboard-loaded-marker")) {
-      content.innerHTML = `<div class="dashboard-loaded-marker"></div>${renderDashboard(session)}`;
-      attachCancelListeners();
-    }
+    const broadcastSlot = document.getElementById("broadcast-slot");
+    if (broadcastSlot) broadcastSlot.innerHTML = renderBroadcastBanner();
+    refreshBell(session.id);
+    rerenderCurrentView(session);
   });
 }
 // --- Chatbox Operational Functionality Code Core Engine ---
@@ -992,10 +1487,11 @@ function initializeFloatingChatboxEngine() {
       aiBubble.style.cssText =
         "background: #e2e8f0; color: #334155; padding: 10px 12px; border-radius: 8px 8px 8px 0px; max-width: 85%; align-self: flex-start; line-height: 1.5; margin-bottom: 8px;";
 
-      // innerHTML is safe here since the systemInstruction prompt output structure uses markdown formatting tags
-      aiBubble.innerHTML =
+      // Escape the model output first, then turn **bold** markdown into <strong>
+      aiBubble.innerHTML = escapeHtml(
         aiReply ||
-        "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?";
+          "I'm here to help! Could you please elaborate a bit more on your concern so I can check our campus regulations accurately?",
+      ).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
       viewport.appendChild(aiBubble);
     } catch (err) {
       // Emergency teardown layout clear steps on pipeline breaks
@@ -1025,9 +1521,12 @@ function initializeFloatingChatboxEngine() {
 }
 export function setupStudentListeners(onLogout, session) {
   const content = document.getElementById("dynamic-content");
-  const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
+  const navButtons = document.querySelectorAll(
+    ".nav-item:not(.logout):not(.ai-chat-trigger)",
+  );
   const sidebar = document.getElementById("sidebar");
   const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+  const isMobile = () => window.innerWidth <= 1023;
 
   // 1. Mobile Hamburger Menu Toggle
   if (mobileMenuBtn && sidebar) {
@@ -1040,32 +1539,28 @@ export function setupStudentListeners(onLogout, session) {
   // 2. Click Outside Mobile Sidebar to Close It
   document.addEventListener("click", (e) => {
     if (
-      window.innerWidth <= 768 &&
+      isMobile() &&
       sidebar.classList.contains("active") &&
       !sidebar.contains(e.target) &&
-      e.target !== mobileMenuBtn
+      !mobileMenuBtn.contains(e.target)
     ) {
       sidebar.classList.remove("active");
     }
   });
 
-  // 3. Navigation View Switcher Grid Engine
+  // 3. Navigation View Switcher
   navButtons.forEach((btn) => {
     btn.onclick = () => {
       navButtons.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
 
-      if (window.innerWidth <= 768) {
-        sidebar.classList.remove("active");
-      }
+      if (isMobile()) sidebar.classList.remove("active");
 
       const target = btn.getAttribute("data-target");
+      refreshBookingSlots = null;
 
-      // --- CORE SUB-ROUTING ENGINE ---
       if (target === "dashboard") {
-        // Drop the template string back into the DOM
         content.innerHTML = renderDashboard(session);
-        attachCancelListeners();
       } else if (target === "book") {
         content.innerHTML = renderBookingForm(session);
         attachBookingListener(session);
@@ -1077,32 +1572,17 @@ export function setupStudentListeners(onLogout, session) {
     };
   });
 
-  // 4. Logout Session Termination Flow
+  // 4. The AI chat button also closes the mobile menu
+  const chatBtn = document.getElementById("openAiChatBtn");
+  if (chatBtn && sidebar) {
+    chatBtn.addEventListener("click", () => {
+      if (isMobile()) sidebar.classList.remove("active");
+    });
+  }
+
+  // 5. Logout Session Termination Flow
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) {
     logoutBtn.onclick = onLogout;
   }
-}
-
-function handleCreateAppointment(newAppointment) {
-  // 1. Fetch current appointments
-  const appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-
-  // 2. CHECK FOR DUPLICATES
-  // Look for any existing appointment for this student on the same date
-  const isDuplicate = appointments.some(app => 
-    app.studentId === newAppointment.studentId && 
-    app.date === newAppointment.date && 
-    app.status !== 'rejected' // Only count active or pending as duplicates
-  );
-
-  if (isDuplicate) {
-    alert("You already have an appointment scheduled for this date.");
-    return false; // Stop the process
-  }
-
-  // 3. If no duplicate, proceed to save
-  appointments.push(newAppointment);
-  localStorage.setItem("gh_appointments", JSON.stringify(appointments));
-  return true; // Success
 }

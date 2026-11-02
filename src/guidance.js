@@ -1,181 +1,269 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
-import { listenForRealTimeUpdates } from "./syncUtil.js";
+import {
+  listenForRealTimeUpdates,
+  renderBroadcastBanner,
+  hashPassword,
+  escapeHtml,
+} from "./syncUtil.js";
 import { createCalendarEvent } from "./calendar.js";
+import { generateStudentSummary } from "./ai.js";
+import {
+  getAppointments,
+  updateAppointment,
+  getUsers,
+  saveUsers,
+  getUserById,
+  getSlotStates,
+  isCounselorFree,
+  addNotification,
+  appointmentStart,
+  formatTime12,
+} from "./store.js";
+import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
+import { renderCounselorCalendar } from "./calendarView.js";
 
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
 import {
   generateAppointmentsTableHtml,
-  renderConfirmationModal,
+  renderDecisionBody,
+  renderCloseBody,
+  renderCaseFile,
   renderStudentRecords,
   renderGuidanceSettings,
   renderLogs,
+  formatDateShort,
 } from "./guidanceView.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
+
+// The logged-in counselor, set when the view is rendered
+let currentSession = null;
+// Status filter chosen on the Appointments table
+let tableFilter = "all";
+
+// Appointments assigned to this counselor, plus unassigned ("Any Available") requests
+function getMyAppointments() {
+  const all = getAppointments();
+  if (!currentSession) return all;
+  return all.filter(
+    (a) => a.counselorId == null || a.counselorId === currentSession.id,
+  );
+}
+
+const needsClosing = (a) =>
+  a.status === "approved" && appointmentStart(a) <= new Date();
+
+function matchesFilter(app) {
+  switch (tableFilter) {
+    case "all":
+      return true;
+    case "to-close":
+      return needsClosing(app);
+    case "closed":
+      return ["rejected", "cancelled", "no-show"].includes(app.status);
+    default:
+      return app.status === tableFilter;
+  }
+}
 
 // --- 1. CORE OPERATIONAL DOM RENDERING CONTROL ---
 
 export function renderAppointmentsTable() {
   const contentContainer = document.getElementById("admin-dynamic-content");
-  if (contentContainer) {
-    const rawAppointments =
-      JSON.parse(localStorage.getItem("gh_appointments")) || [];
+  if (!contentContainer) return;
 
-    // 🔥 SOLID SORT: Force "pending" to the absolute top of the list
-    const sorted = [...rawAppointments].sort((a, b) => {
-      const statusA = (a.status || "").toLowerCase().trim();
-      const statusB = (b.status || "").toLowerCase().trim();
-
-      // If 'a' is pending and 'b' is not, 'a' moves up (comes first)
-      if (statusA === "pending" && statusB !== "pending") return -1;
-      // If 'b' is pending and 'a' is not, 'b' moves up
-      if (statusB === "pending" && statusA !== "pending") return 1;
-
-      // Secondary sort: If they are both pending (or both processed), sort by date
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+  // Pending first, then sessions waiting to be closed, then upcoming, then history
+  const rank = (a) => {
+    if (a.status === "pending") return a.urgent ? 0 : 1;
+    if (needsClosing(a)) return 2;
+    if (a.status === "approved") return 3;
+    return 4;
+  };
+  const sorted = getMyAppointments()
+    .filter(matchesFilter)
+    .sort((a, b) => {
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      const diff = appointmentStart(a) - appointmentStart(b);
+      // History reads newest first
+      return rank(a) === 4 ? -diff : diff;
     });
 
-    contentContainer.innerHTML = generateAppointmentsTableHtml(sorted);
-    setupTableSearch();
+  contentContainer.innerHTML = generateAppointmentsTableHtml(
+    sorted,
+    tableFilter,
+  );
+  setupTableSearch();
+
+  const filterSelect = document.getElementById("statusFilter");
+  if (filterSelect) {
+    filterSelect.onchange = () => {
+      tableFilter = filterSelect.value;
+      renderAppointmentsTable();
+    };
   }
 }
 
 // --- 2. LIFECYCLE INTERACTION PIPELINES ---
 
-window.openActionModal = (id, status) => {
-  const existingModal = document.getElementById("modal-root");
-  if (existingModal) existingModal.remove();
+function emailStudent(app, status, notes) {
+  return emailjs
+    .send("service_mtv9cbi", "template_mublumh", {
+      subject_line: `Update: Your Appointment is ${status.toUpperCase()}`,
+      to_email: app.studentEmail,
+      recipient_name: app.studentName,
+      header_title: "Appointment Status Update",
+      main_message: `Your guidance appointment request has been ${status}. Please see details below.`,
+      app_type: app.type,
+      app_date: app.date,
+      app_time: formatTime12(app.time),
+      status,
+      notes: notes || "No additional notes provided.",
+    })
+    .catch((error) => console.error("Failed to send email:", error));
+}
 
-  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const targetApp = apps.find((a) => a.id === id);
-  if (!targetApp) return;
-
-  const modalContainer = document.createElement("div");
-  modalContainer.id = "modal-root";
-  modalContainer.innerHTML = renderConfirmationModal(targetApp, status);
-  document.body.appendChild(modalContainer);
-};
-
-window.closeModal = () => {
-  const modal = document.getElementById("modal-root");
-  if (modal) modal.remove();
-};
-
-window.processStatusUpdate = async (id, newStatus) => {
-  const notes = document.getElementById("modalNotes").value;
-  const timeInput = document.getElementById("modalTime");
-  const newTime = timeInput ? timeInput.value : null;
-
-  if (newStatus === "rejected" && !notes.trim()) {
-    alert("Please provide a reason for rejection.");
-    return;
-  }
-
-  let appointments = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const targetApp = appointments.find((a) => a.id === id);
-  if (!targetApp) {
-    alert("Appointment not found.");
-    return;
-  }
-
-  const rawTime = newTime || targetApp.time;
-  let finalTime = rawTime;
-
-  if (
-    rawTime.toLowerCase().includes("am") ||
-    rawTime.toLowerCase().includes("pm")
-  ) {
-    const [timePart, modifier] = rawTime.split(" ");
-    const timeSegments = timePart.split(":");
-    let hours = timeSegments[0];
-    const minutes = timeSegments[1];
-
-    if (hours === "12") hours = "00";
-    if (modifier.toLowerCase() === "pm")
-      hours = String(parseInt(hours, 10) + 12);
-
-    finalTime = `${hours.padStart(2, "0")}:${minutes}`;
-  }
-
-  appointments = appointments.map((app) => {
-    if (app.id === id) {
-      return {
-        ...app,
-        status: newStatus,
-        counselorNotes: notes,
-        time: finalTime,
-        updatedAt: new Date().toISOString(),
-      };
-    }
-    return app;
-  });
-
-  localStorage.setItem("gh_appointments", JSON.stringify(appointments));
-
-  if (newStatus === "approved") {
-    try {
-      const [hoursStr, minutesStr] = finalTime.split(":");
-      const startHours = parseInt(hoursStr, 10);
-      const minutesVal = parseInt(minutesStr, 10);
-      const [year, month, day] = targetApp.date
-        .split("-")
-        .map((num) => parseInt(num, 10));
-
-      const startEventDate = new Date(
-        year,
-        month - 1,
-        day,
-        startHours,
-        minutesVal,
-        0,
-      );
-      const endEventDate = new Date(startEventDate);
-      endEventDate.setHours(startEventDate.getHours() + 1);
-
-      await createCalendarEvent({
-        summary: `Guidance Appointment: ${targetApp.studentName}`,
-        description: `Service Type: ${targetApp.serviceType || "General Consultation"}\nNotes: ${notes || "No additional counselor notes."}`,
-        startTime: startEventDate.toISOString(),
-        endTime: endEventDate.toISOString(),
-      });
-    } catch (gcalError) {
-      console.error(
-        "⚠️ Automated Google Calendar synchronization stalled:",
-        gcalError,
-      );
-    }
-  }
-
-  const templateParams = {
-    subject_line: `Update: Your Appointment is ${newStatus.toUpperCase()}`,
-    to_email: targetApp.studentEmail,
-    recipient_name: targetApp.studentName,
-    header_title: "Appointment Status Update",
-    main_message: `Your guidance appointment request has been ${newStatus}. Please see details below.`,
-    app_type: targetApp.serviceType || targetApp.type,
-    app_date: targetApp.date,
-    app_time: rawTime,
-    status: newStatus,
-    notes: notes || "No additional notes provided.",
-  };
-
+async function addToGoogleCalendar(app, notes) {
   try {
-    await emailjs.send("service_mtv9cbi", "template_mublumh", templateParams);
-  } catch (error) {
-    console.error("Failed to send email:", error);
+    const start = appointmentStart(app);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+    await createCalendarEvent({
+      summary: `Guidance Appointment: ${app.studentName}`,
+      description: `Service Type: ${app.type}\nNotes: ${notes || "No additional counselor notes."}`,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+    });
+  } catch (gcalError) {
+    console.error("⚠️ Google Calendar sync failed:", gcalError);
   }
+}
 
-  closeModal();
-  renderAppointmentsTable();
-  updateSidebarBadges();
+// Approve or reject a pending request
+function openDecisionModal(app, status) {
+  const isApprove = status === "approved";
+  const slots = getSlotStates(app.date, currentSession.id, app.id);
 
-  if (window.addNotification) {
-    window.addNotification(
-      `Appointment for ${targetApp.studentName} has been ${newStatus}.`,
-    );
-  }
-};
+  openModal({
+    title: isApprove ? "Approve Request" : "Reject Request",
+    icon: isApprove ? "check_circle" : "block",
+    danger: !isApprove,
+    confirmText: isApprove ? "Approve & Notify" : "Reject & Notify",
+    bodyHtml: renderDecisionBody(app, status, slots),
+    onConfirm: async ({ card, showError }) => {
+      const notes = card.querySelector("#decisionNotes").value.trim();
+      if (!isApprove && !notes) {
+        showError("Please give the student a reason.");
+        return false;
+      }
+
+      const changes = { status, counselorNotes: notes };
+      if (isApprove) {
+        const time = card.querySelector("#decisionTime").value;
+        if (!isCounselorFree(currentSession.id, app.date, time, app.id)) {
+          showError("You already have another session at that time.");
+          return false;
+        }
+        // Approving an unassigned request makes it yours
+        Object.assign(changes, {
+          time,
+          counselorId: currentSession.id,
+          counselorName: currentSession.name,
+        });
+      }
+
+      const updated = updateAppointment(app.id, changes);
+      const when = `${formatDateShort(updated.date)}, ${formatTime12(updated.time)}`;
+      addNotification(
+        updated.studentId,
+        isApprove
+          ? `Your ${updated.type} session on ${when} was approved by ${currentSession.name}.${notes ? ` Note: ${notes}` : ""}`
+          : `Your ${updated.type} request for ${when} was not approved. Reason: ${notes}`,
+      );
+      window.logActivity(
+        currentSession,
+        `${isApprove ? "Approved" : "Rejected"} ${updated.studentName}'s session on ${updated.date} ${formatTime12(updated.time)}`,
+      );
+
+      refreshCurrentView();
+      if (isApprove) await addToGoogleCalendar(updated, notes);
+      emailStudent(updated, status, notes);
+      return true;
+    },
+  });
+}
+
+// Close an approved session that has started: completed or no-show
+function openCloseModal(app, status) {
+  const isComplete = status === "completed";
+
+  openModal({
+    title: isComplete ? "Complete Session" : "Mark as No-show",
+    icon: isComplete ? "task_alt" : "person_off",
+    danger: !isComplete,
+    confirmText: isComplete ? "Save & Complete" : "Mark No-show",
+    bodyHtml: renderCloseBody(app, status),
+    onConfirm: ({ card }) => {
+      const caseNotes = card.querySelector("#closeCaseNotes").value.trim();
+      const changes = { status, caseNotes };
+      if (isComplete) {
+        changes.followUp = card.querySelector("#closeFollowUp").checked;
+        const message = card.querySelector("#closeMessage").value.trim();
+        if (message) changes.counselorNotes = message;
+      }
+
+      const updated = updateAppointment(app.id, changes);
+      const when = formatDateShort(updated.date);
+      let studentMessage = `You missed your ${updated.type} session on ${when}. Please book a new appointment if you still need help.`;
+      if (isComplete) {
+        studentMessage = `Your ${updated.type} session on ${when} is complete. You can now rate it in My History.`;
+        if (updated.followUp) {
+          studentMessage += " Your counselor recommends a follow-up session.";
+        }
+      }
+      addNotification(updated.studentId, studentMessage);
+      window.logActivity(
+        currentSession,
+        `Marked ${updated.studentName}'s session on ${updated.date} as ${status}`,
+      );
+      refreshCurrentView();
+    },
+  });
+}
+
+// Student case file with AI summary
+function openCaseFile(studentId) {
+  const student = getUserById(studentId);
+  if (!student) return;
+  const apps = getAppointments()
+    .filter((a) => a.studentId === studentId)
+    .sort((a, b) => appointmentStart(b) - appointmentStart(a));
+
+  openModal({
+    title: `Case File: ${student.name}`,
+    icon: "folder_shared",
+    cancelText: "Close",
+    wide: true,
+    bodyHtml: renderCaseFile(student, apps),
+    onOpen: ({ card }) => {
+      const btn = card.querySelector("#aiSummaryBtn");
+      const output = card.querySelector("#aiSummaryOutput");
+      if (!btn) return;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        output.textContent = "Generating summary...";
+        const summary = await generateStudentSummary(student.name, apps);
+        // Escape the model output, then keep **bold** and line breaks
+        output.innerHTML = escapeHtml(summary || "No summary returned.")
+          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+          .replace(/\n/g, "<br>");
+        btn.disabled = false;
+        btn.textContent = "Regenerate";
+      };
+    },
+  });
+  window.logActivity(currentSession, `Opened case file of ${student.name}`);
+}
 
 // --- 3. FILTER & STRUCTURAL NAV HANDLERS ---
 
@@ -217,7 +305,7 @@ function handleNoSearchResults(tbody, visibleCount, filter) {
       noResultRow.className = "no-search-results";
       noResultRow.innerHTML = `
         <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
-            <i class="material-icons" style="vertical-align: middle;">search_off</i> No matches found for "${filter}"
+            <i class="material-icons" style="vertical-align: middle;">search_off</i> No matches found for "${escapeHtml(filter)}"
         </td>
       `;
       tbody.appendChild(noResultRow);
@@ -243,31 +331,60 @@ export function setupStudentSearch() {
   };
 }
 
+function getActiveTab() {
+  return document
+    .querySelector("#admin-nav .nav-item.active")
+    ?.getAttribute("data-target");
+}
+
+// Draw a tab's content
+function renderTab(target) {
+  const content = document.getElementById("admin-dynamic-content");
+  if (!content) return;
+
+  if (target === "appointments") {
+    renderAppointmentsTable();
+  } else if (target === "calendar") {
+    renderCounselorCalendar(content, currentSession);
+  } else if (target === "students") {
+    const students = getUsers().filter((user) => user.role === "student");
+    content.innerHTML = renderStudentRecords(students);
+    setupStudentSearch();
+  } else if (target === "settings") {
+    const me = getUserById(currentSession.id) || currentSession;
+    content.innerHTML = renderGuidanceSettings(me.notifyEmail || me.email);
+    attachSettingsListener();
+  } else if (target === "logs") {
+    const activities = getMyAppointments()
+      .filter((app) => app.updatedAt)
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    content.innerHTML = renderLogs(activities);
+  }
+}
+
+// Redraw data-driven tabs after a change; leave forms and searches alone
+function refreshCurrentView() {
+  const target = getActiveTab();
+  const search = document.getElementById("tableSearch");
+  if (target === "appointments" && !(search && search.value)) {
+    renderAppointmentsTable();
+  } else if (target === "calendar" || target === "logs") {
+    renderTab(target);
+  }
+  updateSidebarBadges();
+}
+
 // --- 4. MAIN LAYOUT INITIALIZER & ROUTER ---
 
 export function renderGuidanceView(root, session, onLogout) {
-  // 2. Generate the amber marquee ticker frame if announcements exist
+  currentSession = session;
 
   // Mount the real-time syncing subscription hook exactly ONCE
   listenForRealTimeUpdates(() => {
-    const activeSection = document.querySelector(".nav-item.active");
-    if (!activeSection) return;
-
-    const currentTab = activeSection.getAttribute("data-target");
-
-    // 1. Prevent table layout thrashing: Only render if the view container is blank
-    if (currentTab === "appointments") {
-      const tableContainer = document.getElementById("admin-dynamic-content");
-      if (
-        tableContainer &&
-        !tableContainer.querySelector(".table-rendered-marker")
-      ) {
-        tableContainer.innerHTML = `<div class="table-rendered-marker"></div>`;
-        renderAppointmentsTable();
-      }
-    }
-
-    updateSidebarBadges();
+    const broadcastSlot = document.getElementById("broadcast-slot");
+    if (broadcastSlot) broadcastSlot.innerHTML = renderBroadcastBanner();
+    refreshBell(session.id);
+    refreshCurrentView();
   });
 
   root.innerHTML = `
@@ -278,7 +395,7 @@ export function renderGuidanceView(root, session, onLogout) {
                     <i class="material-icons">gavel</i>
                     <div class="brand-info">
                         <span class="brand-name">Granby Gateway</span>
-                        <span class="system-tag">v2.4.0 High-Volume</span>
+                        <span class="system-tag">Guidance Office</span>
                     </div>
                 </div>
             </div>
@@ -288,123 +405,204 @@ export function renderGuidanceView(root, session, onLogout) {
                 <i class="material-icons">search</i>
                 <input type="text" id="globalNavSearch" class="search" placeholder="Quick find">
             </div>
-            
+
             <nav id="admin-nav">
                 <div class="nav-group">
                     <div class="nav-label">Operations</div>
                     <button class="nav-item active" data-target="appointments">
-                        <i class="material-icons">calendar_today</i> 
+                        <i class="material-icons">calendar_today</i>
                         <span>Appointments</span>
                         <span class="badge" id="pendingBadge">0</span>
                     </button>
+                    <button class="nav-item" data-target="calendar">
+                        <i class="material-icons">calendar_month</i>
+                        <span>My Calendar</span>
+                    </button>
                     <button class="nav-item" data-target="students">
-                        <i class="material-icons">people</i> 
+                        <i class="material-icons">people</i>
                         <span>Student Records</span>
                     </button>
 
                     <button class="nav-item" data-target="logs">
-                        <i class="material-icons">history</i> 
+                        <i class="material-icons">history</i>
                         <span>Activity Logs</span>
                     </button>
 
                     <div class="nav-label">System</div>
                     <button class="nav-item" data-target="settings">
-                        <i class="material-icons">settings</i> 
+                        <i class="material-icons">settings</i>
                         <span>Settings</span>
                     </button>
                 </div>
 
                 <div class="nav-footer">
                     <button class="nav-item logout" id="adminLogoutBtn">
-                        <i class="material-icons">power_settings_new</i> 
+                        <i class="material-icons">power_settings_new</i>
                         <span>Logout</span>
                     </button>
                 </div>
             </nav>
         </aside>
-       
+
         <main class="content-area">
             <header class="view-header">
                 <div class="header-info">
                     <h1>Guidance Dashboard</h1>
-                    <span class="status-badge admin-badge">Good day! ${session.name}</span>
+                    <span class="status-badge admin-badge">Good day! ${escapeHtml(session.name)}</span>
                 </div>
                 <div class="header-actions">
-                    <div class="notification-wrapper" style="position: relative;">
-                        <button class="btn-secondary icon-only" id="notificationBtn" title="Notifications">
-                            <i class="material-icons">notifications</i>
-                            <span class="notification-badge" id="notifBadge">0</span>
-                        </button>
-                        <div class="notification-dropdown hidden" id="notificationDropdown">
-                            <div class="notif-header">
-                                <span>Notifications</span>
-                                <button id="clearNotifs">Clear All</button>
-                            </div>
-                            <div class="notif-body" id="notifBody">
-                                <p class="empty-notif">No new notifications</p>
-                            </div>
-                        </div>
-                    </div>
+                    ${renderBellHtml()}
                 </div>
             </header>
 
+            <div id="broadcast-slot">${renderBroadcastBanner()}</div>
             <section id="admin-dynamic-content"></section>
         </main>
     </div>
   `;
 
-  // 🔥 EXECUTE TARGET SORTED RENDER IMMEDIATELY ON DOM INITIALIZATION
   renderAppointmentsTable();
-
   setupAdminListeners(onLogout);
+  setupBell(session.id);
   updateSidebarBadges();
 }
+
 function updateSidebarBadges() {
-  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const pendingCount = apps.filter((a) => a.status === "pending").length;
+  const apps = getMyAppointments();
+  const count = apps.filter(
+    (a) => a.status === "pending" || needsClosing(a),
+  ).length;
   const badge = document.getElementById("pendingBadge");
   if (badge) {
-    badge.innerText = pendingCount;
-    badge.style.display = pendingCount > 0 ? "block" : "none";
+    badge.innerText = count;
+    badge.title = "Pending requests and sessions to close";
+    badge.style.display = count > 0 ? "block" : "none";
   }
+}
+
+function attachSettingsListener() {
+  const form = document.getElementById("settingsForm");
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const email = document.getElementById("adminEmail").value.trim();
+      const users = getUsers();
+      const me = users.find((u) => u.id === currentSession.id);
+      if (me) {
+        me.notifyEmail = email;
+        saveUsers(users);
+        window.logActivity(currentSession, "Updated notification email");
+      }
+      const btn = form.querySelector("button");
+      btn.innerText = "Settings Saved!";
+      btn.style.background = "#10b981";
+      setTimeout(() => {
+        btn.innerText = "Update Email";
+        btn.style.background = "";
+      }, 2000);
+    };
+  }
+
+  let generatedOTP = null;
+  const requestBtn = document.getElementById("requestOtpBtn");
+  const verifyBtn = document.getElementById("verifyOtpBtn");
+  const otpContainer = document.getElementById("otpContainer");
+  const newPassInput = document.getElementById("newPassword");
+  const otpInput = document.getElementById("otpInput");
+
+  if (requestBtn) {
+    requestBtn.onclick = async () => {
+      const newPass = newPassInput.value;
+      if (newPass.length < 8)
+        return alert("Password must be at least 8 characters long.");
+
+      // Send the OTP to the logged-in counselor's own account email
+      const recipientEmail = currentSession.email;
+
+      generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString(
+        [],
+        { hour: "2-digit", minute: "2-digit" },
+      );
+
+      requestBtn.innerText = "Sending OTP...";
+      requestBtn.disabled = true;
+
+      try {
+        await emailjs.send("service_mtv9cbi", "template_gbmoria", {
+          to_email: recipientEmail,
+          otp: generatedOTP,
+          otp_code: generatedOTP,
+          time: expiryTime,
+        });
+        alert(`OTP Sent to ${recipientEmail}`);
+        otpContainer.classList.remove("hidden");
+        requestBtn.classList.add("hidden");
+      } catch (error) {
+        console.error("EmailJS Error:", error);
+        alert("Failed to send OTP.");
+        requestBtn.disabled = false;
+        requestBtn.innerText = "Request OTP to Change Password";
+      }
+    };
+  }
+
+  if (verifyBtn) {
+    verifyBtn.onclick = async () => {
+      if (generatedOTP && otpInput.value.trim() === generatedOTP) {
+        const users = getUsers();
+        const me = users.find((u) => u.id === currentSession.id);
+
+        if (me) {
+          me.pass = await hashPassword(newPassInput.value);
+          saveUsers(users);
+          generatedOTP = null;
+          window.logActivity(currentSession, "Changed password");
+
+          alert("Success! Your password has been updated.");
+          otpContainer.classList.add("hidden");
+          newPassInput.value = "";
+          otpInput.value = "";
+          requestBtn.classList.remove("hidden");
+          requestBtn.disabled = false;
+          requestBtn.innerText = "Request OTP to Change Password";
+        }
+      } else {
+        alert("Invalid OTP code.");
+      }
+    };
+  }
+
+  document
+    .querySelectorAll(".settings-card .toggle-password")
+    .forEach((btn) => {
+      btn.onclick = () => {
+        const targetId = btn.getAttribute("data-target");
+        const input = document.getElementById(targetId);
+        const icon = btn.querySelector("i");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.innerText = "visibility_off";
+        } else {
+          input.type = "password";
+          icon.innerText = "visibility";
+        }
+      };
+    });
 }
 
 function setupAdminListeners(onLogout) {
   const content = document.getElementById("admin-dynamic-content");
-  const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
+  const navButtons = document.querySelectorAll(
+    "#admin-nav .nav-item:not(.logout)",
+  );
   const globalSearch = document.getElementById("globalNavSearch");
 
   navButtons.forEach((btn) => {
     btn.onclick = () => {
       navButtons.forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-
-      const target = btn.getAttribute("data-target");
-
-      // --- CORE COUNSELOR NAVIGATION ROUTING SUB-ENGINE ---
-      if (target === "appointments") {
-        renderAppointmentsTable();
-      } else if (target === "students") {
-        const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
-        const students = allUsers.filter((user) => user.role === "student");
-        content.innerHTML = renderStudentRecords(students);
-        setupStudentSearch();
-      } 
-      else if (target === "settings") {
-        const savedEmail =
-          localStorage.getItem("admin_notification_email") ||
-          "jellopancake213@gmail.com";
-        content.innerHTML = renderGuidanceSettings(savedEmail);
-        attachSettingsListener();
-      } else if (target === "logs") {
-        const appointments =
-          JSON.parse(localStorage.getItem("gh_appointments")) || [];
-        const activities = appointments
-          .filter((app) => app.updatedAt)
-          .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        content.innerHTML = renderLogs(activities);
-      }
-
+      renderTab(btn.getAttribute("data-target"));
       if (globalSearch) globalSearch.value = "";
     };
   });
@@ -425,179 +623,32 @@ function setupAdminListeners(onLogout) {
     };
   }
 
-  function attachSettingsListener() {
-    const form = document.getElementById("settingsForm");
-    if (form) {
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        const email = document.getElementById("adminEmail").value;
-        localStorage.setItem("admin_notification_email", email);
-        const btn = form.querySelector("button");
-        btn.innerText = "Settings Saved!";
-        btn.style.background = "#10b981";
-        setTimeout(() => {
-          btn.innerText = "Update Email";
-          btn.style.background = "";
-        }, 2000);
-      };
-    }
-
-    let generatedOTP = null;
-    const requestBtn = document.getElementById("requestOtpBtn");
-    const verifyBtn = document.getElementById("verifyOtpBtn");
-    const otpContainer = document.getElementById("otpContainer");
-    const newPassInput = document.getElementById("newPassword");
-    const otpInput = document.getElementById("otpInput");
-
-    if (requestBtn) {
-      requestBtn.onclick = async () => {
-        const newPass = newPassInput.value;
-        if (newPass.length < 8)
-          return alert("Password must be at least 8 characters long.");
-
-        const session = JSON.parse(localStorage.getItem("gh_user_session"));
-        const savedNotification = localStorage.getItem(
-          "admin_notification_email",
-        );
-        const recipientEmail =
-          savedNotification ||
-          (session ? session.email : "jellopancake213@gmail.com");
-
-        generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString(
-          [],
-          { hour: "2-digit", minute: "2-digit" },
-        );
-
-        requestBtn.innerText = "Sending OTP...";
-        requestBtn.disabled = true;
-
-        try {
-          await emailjs.send("service_mtv9cbi", "template_gbmoria", {
-            to_email: recipientEmail,
-            otp_code: generatedOTP,
-            time: expiryTime,
-          });
-          alert(`OTP Sent to ${recipientEmail}`);
-          otpContainer.classList.remove("hidden");
-          requestBtn.classList.add("hidden");
-        } catch (error) {
-          console.error("EmailJS Error:", error);
-          alert("Failed to send OTP.");
-          requestBtn.disabled = false;
-          requestBtn.innerText = "Request OTP to Change Password";
-        }
-      };
-    }
-
-    if (verifyBtn) {
-      verifyBtn.onclick = () => {
-        if (otpInput.value.trim() === generatedOTP) {
-          const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-          const adminIndex = users.findIndex((u) => u.role === "guidance");
-
-          if (adminIndex !== -1) {
-            users[adminIndex].pass = newPassInput.value;
-            localStorage.setItem("gh_users", JSON.stringify(users));
-
-            const session = JSON.parse(localStorage.getItem("gh_user_session"));
-            if (session) {
-              session.pass = newPassInput.value;
-              localStorage.setItem("gh_user_session", JSON.stringify(session));
-            }
-
-            alert("Success! Your password has been updated.");
-            otpContainer.classList.add("hidden");
-            newPassInput.value = "";
-            otpInput.value = "";
-            requestBtn.classList.remove("hidden");
-            requestBtn.disabled = false;
-            requestBtn.innerText = "Request OTP to Change Password";
-          }
-        } else {
-          alert("Invalid OTP code.");
-        }
-      };
-    }
-
-    document
-      .querySelectorAll(".settings-card .toggle-password")
-      .forEach((btn) => {
-        btn.onclick = () => {
-          const targetId = btn.getAttribute("data-target");
-          const input = document.getElementById(targetId);
-          const icon = btn.querySelector("i");
-          if (input.type === "password") {
-            input.type = "text";
-            icon.innerText = "visibility_off";
-          } else {
-            input.type = "password";
-            icon.innerText = "visibility";
-          }
-        };
-      });
-  }
-
-  // Notification Core DOM Actions
-  const notifBtn = document.getElementById("notificationBtn");
-  const notifDropdown = document.getElementById("notificationDropdown");
-  const notifBadge = document.getElementById("notifBadge");
-  const notifBody = document.getElementById("notifBody");
-  const clearNotifs = document.getElementById("clearNotifs");
-  const appointmentsData =
-    JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const pendingApps = appointmentsData.filter(
-    (app) => app.status === "pending",
-  );
-
-  if (notifBtn) {
-    notifBtn.onclick = (e) => {
-      e.stopPropagation();
-      notifDropdown.classList.toggle("hidden");
-      if (!notifDropdown.classList.contains("hidden")) {
-        notifBadge.style.display = "none";
-        notifBadge.innerText = "0";
-      }
-    };
-  }
-
-  document.addEventListener("click", (e) => {
-    if (notifDropdown && !notifDropdown.contains(e.target)) {
-      notifDropdown.classList.add("hidden");
-    }
-  });
-
-  if (clearNotifs) {
-    clearNotifs.onclick = () => {
-      notifBody.innerHTML = '<p class="empty-notif">No new notifications</p>';
-    };
-  }
-
-  window.addNotification = (message) => {
-    if (!notifBody) return;
-    const emptyMsg = notifBody.querySelector(".empty-notif");
-    if (emptyMsg) emptyMsg.remove();
-
-    const notifItem = document.createElement("div");
-    notifItem.className = "notif-item";
-    notifItem.innerHTML = `<p>${message}</p><small>${new Date().toLocaleTimeString()}</small>`;
-    notifBody.prepend(notifItem);
-
-    const currentCount = parseInt(notifBadge.innerText || 0, 10);
-    notifBadge.innerText = currentCount + 1;
-    notifBadge.style.display = "block";
-  };
-
-  if (pendingApps.length > 0 && !sessionStorage.getItem("notified_pending")) {
-    window.addNotification(
-      `You have ${pendingApps.length} pending appointment(s) to review.`,
-    );
-    sessionStorage.setItem("notified_pending", "true");
-  }
-
+  // One delegated handler for every button inside the content area
   content.onclick = (e) => {
-    if (e.target.closest("#printStudentBtn")) printReport("students");
-    if (e.target.closest("#printAnalyticsBtn")) printReport("analytics");
+    if (e.target.closest("#printStudentBtn")) {
+      printReport("students");
+      return;
+    }
+
+    const caseLink = e.target.closest(".case-link");
+    if (caseLink) {
+      openCaseFile(Number(caseLink.dataset.student));
+      return;
+    }
+
+    const actBtn = e.target.closest(".act-btn");
+    if (actBtn) {
+      const app = getAppointments().find(
+        (a) => a.id === Number(actBtn.dataset.id),
+      );
+      if (!app) return;
+      const { action } = actBtn.dataset;
+      if (action === "approved" || action === "rejected") {
+        openDecisionModal(app, action);
+      } else {
+        openCloseModal(app, action);
+      }
+    }
   };
 
   const logoutBtn = document.getElementById("adminLogoutBtn");
@@ -607,11 +658,10 @@ function setupAdminListeners(onLogout) {
 // --- 5. DATA ANALYTICS & EXPORTS ---
 
 export function printReport(type) {
-  const allUsers = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const students = allUsers.filter((user) => user.role === "student");
+  const students = getUsers().filter((user) => user.role === "student");
 
   let printContent = "";
-  
+
   if (type === "students") {
     printContent = `
       <h1>Student Directory Export</h1>
@@ -623,7 +673,7 @@ export function printReport(type) {
           </tr>
         </thead>
         <tbody>
-          ${students.map((std) => `<tr><td>${std.name}</td><td>${std.yearLevel || "N/A"}</td><td>${std.course || "N/A"}</td><td>${std.email}</td><td>${std.id}</td></tr>`).join("")}
+          ${students.map((std) => `<tr><td>${escapeHtml(std.name)}</td><td>${escapeHtml(std.yearLevel || "N/A")}</td><td>${escapeHtml(std.course || "N/A")}</td><td>${escapeHtml(std.email)}</td><td>${std.id}</td></tr>`).join("")}
         </tbody>
       </table>
     `;
@@ -651,5 +701,3 @@ export function printReport(type) {
     win.close();
   }, 500);
 }
-
-// Add this to adminjs.txt

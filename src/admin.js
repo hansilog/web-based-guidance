@@ -1,3 +1,19 @@
+import { hashPassword, escapeHtml } from "./syncUtil.js";
+import {
+  getUsers,
+  saveUsers,
+  getAppointments,
+  saveAppointments,
+  getBlocks,
+  saveBlocks,
+  addNotification,
+  formatTime12,
+  toCsv,
+} from "./store.js";
+
+// The logged-in admin, used for activity logging
+let adminSession = null;
+
 /**
  * Renders the Super Admin View
  * @param {HTMLElement} root - The root element
@@ -41,14 +57,14 @@ function renderStaffManager(container) {
                             <tr>
                                 <td data-label="Counselor Profile">
                                     <div style="display: flex; flex-direction: column;">
-                                        <strong style="color: #1e293b;">${c.name}</strong>
+                                        <strong style="color: #1e293b;">${escapeHtml(c.name)}</strong>
                                         <span style="font-size: 0.725rem; color: #64748b; font-family: monospace;">ID: ${c.id}</span>
                                     </div>
                                 </td>
-                                <td data-label="Email Account" style="color: #475569;">${c.email}</td>
+                                <td data-label="Email Account" style="color: #475569;">${escapeHtml(c.email)}</td>
                                 <td data-label="Specialty Focus Area">
                                     <span style="background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
-                                        ${c.specialty || "General Counseling"}
+                                        ${escapeHtml(c.specialty || "General Counseling")}
                                     </span>
                                 </td>
                                 <td data-label="Administrative Actions" style="text-align: right;">
@@ -77,12 +93,17 @@ export function renderReports(stats) {
   const total = stats.totalApps || 1;
   return `
     <div class="admin-card">
-        <div class="card-header">
+        <div class="card-header reports-header">
             <h2><i class="material-icons">insights</i> Guidance Intelligence Dashboard</h2>
             
-<button onclick="window.printReport('analytics', ${JSON.stringify(stats).replace(/"/g, "'")})" class="btn-primary">
-    <i class="material-icons">download</i> Generate Report
-</button>
+            <div class="report-actions">
+                <button onclick="window.exportAppointmentsCsv()" class="btn-secondary">
+                    <i class="material-icons">table_view</i> Export CSV
+                </button>
+                <button onclick="window.printReport('analytics', window.lastReportStats)" class="btn-primary">
+                    <i class="material-icons">download</i> Generate Report
+                </button>
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -111,6 +132,7 @@ export function renderReports(stats) {
                     ${renderChartRow("Academic", stats.academic, (stats.academic / total) * 100, "bg-blue")}
                     ${renderChartRow("Personal", stats.personal, (stats.personal / total) * 100, "bg-red")}
                     ${renderChartRow("Career", stats.career, (stats.career / total) * 100, "bg-green")}
+                    ${renderChartRow("Other types", stats.otherTypes, (stats.otherTypes / total) * 100, "bg-blue")}
                 </div>
             </div>
 
@@ -120,6 +142,33 @@ export function renderReports(stats) {
                     ${renderChartRow("Approved", stats.statusBreakdown.approved, (stats.statusBreakdown.approved / total) * 100, "bg-green")}
                     ${renderChartRow("Pending", stats.statusBreakdown.pending, (stats.statusBreakdown.pending / total) * 100, "bg-orange")}
                     ${renderChartRow("Rejected", stats.statusBreakdown.rejected, (stats.statusBreakdown.rejected / total) * 100, "bg-red")}
+                    ${renderChartRow("Completed", stats.statusBreakdown.completed, (stats.statusBreakdown.completed / total) * 100, "bg-blue")}
+                    ${renderChartRow("No-show", stats.statusBreakdown["no-show"], (stats.statusBreakdown["no-show"] / total) * 100, "bg-purple")}
+                    ${renderChartRow("Cancelled", stats.statusBreakdown.cancelled, (stats.statusBreakdown.cancelled / total) * 100, "bg-cyan")}
+                </div>
+            </div>
+
+            <div class="report-section">
+                <h3><i class="material-icons">star_rate</i> Student Satisfaction</h3>
+                <div class="trend-highlight" style="padding: 12px; text-align: center; background: #f8fafc; border-radius: 8px; margin-bottom: 12px;">
+                    <span style="font-size: 2rem; font-weight: 800; color: #f59e0b;">${stats.ratings.overall ?? "—"}</span>
+                    <p style="margin-top: 2px; color: #64748b; font-size: 0.8rem;">Average rating out of 5 · ${stats.ratings.count} rating${stats.ratings.count === 1 ? "" : "s"}</p>
+                </div>
+                <div class="chart-container">
+                    ${
+                      stats.ratings.byCounselor.length > 0
+                        ? stats.ratings.byCounselor
+                            .map((c) =>
+                              renderChartRow(
+                                `${c.name} (${c.avg})`,
+                                c.count,
+                                (c.avg / 5) * 100,
+                                "bg-orange",
+                              ),
+                            )
+                            .join("")
+                        : '<p class="empty-msg">No ratings yet.</p>'
+                    }
                 </div>
             </div>
 
@@ -175,7 +224,7 @@ function renderChartRow(label, count, width, colorClass) {
   const barWidth = count > 0 ? width : 0;
   return `
     <div class="chart-row" style="display: flex; align-items: center; margin-bottom: 12px;">
-        <span style="width: 130px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${label}</span>
+        <span style="width: 130px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(label)}</span>
         <div style="flex-grow: 1; height: 10px; background: #f1f5f9; border-radius: 5px; margin: 0 12px; overflow: hidden;">
             <div class="${colorClass}" style="width: ${barWidth}%; height: 100%; border-radius: 5px; transition: width 0.6s ease;"></div>
         </div>
@@ -187,7 +236,10 @@ window.printReport = (type, stats = null) => {
   if (type !== "analytics" || !stats) return;
 
   const total = stats.totalApps || 1;
-  const efficiencyRate = ((stats.statusBreakdown.approved / total) * 100).toFixed(1);
+  const efficiencyRate = (
+    (stats.statusBreakdown.approved / total) *
+    100
+  ).toFixed(1);
 
   const printContent = `
     <h1>Granby Gateway Intelligence Report</h1>
@@ -211,13 +263,14 @@ window.printReport = (type, stats = null) => {
     <h3>Detailed Breakdown (Spreadsheet View)</h3>
     <table>
       <tr><th>Category</th><th>Breakdown Item</th><th>Count</th><th>% of Total</th></tr>
-      <tr><td rowspan="3">Request Types</td><td>Academic</td><td>${stats.academic}</td><td>${((stats.academic/total)*100).toFixed(1)}%</td></tr>
-      <tr><td>Personal</td><td>${stats.personal}</td><td>${((stats.personal/total)*100).toFixed(1)}%</td></tr>
-      <tr><td>Career</td><td>${stats.career}</td><td>${((stats.personal/total)*100).toFixed(1)}%</td></tr>
+      <tr><td rowspan="4">Request Types</td><td>Academic</td><td>${stats.academic}</td><td>${((stats.academic / total) * 100).toFixed(1)}%</td></tr>
+      <tr><td>Personal</td><td>${stats.personal}</td><td>${((stats.personal / total) * 100).toFixed(1)}%</td></tr>
+      <tr><td>Career</td><td>${stats.career}</td><td>${((stats.career / total) * 100).toFixed(1)}%</td></tr>
+      <tr><td>Other types</td><td>${stats.otherTypes}</td><td>${((stats.otherTypes / total) * 100).toFixed(1)}%</td></tr>
       
-      <tr><td rowspan="3">Case Status</td><td>Approved</td><td>${stats.statusBreakdown.approved}</td><td>${((stats.statusBreakdown.approved/total)*100).toFixed(1)}%</td></tr>
-      <tr><td>Pending</td><td>${stats.statusBreakdown.pending}</td><td>${((stats.statusBreakdown.pending/total)*100).toFixed(1)}%</td></tr>
-      <tr><td>Rejected</td><td>${stats.statusBreakdown.rejected}</td><td>${((stats.statusBreakdown.rejected/total)*100).toFixed(1)}%</td></tr>
+      <tr><td rowspan="3">Case Status</td><td>Approved</td><td>${stats.statusBreakdown.approved}</td><td>${((stats.statusBreakdown.approved / total) * 100).toFixed(1)}%</td></tr>
+      <tr><td>Pending</td><td>${stats.statusBreakdown.pending}</td><td>${((stats.statusBreakdown.pending / total) * 100).toFixed(1)}%</td></tr>
+      <tr><td>Rejected</td><td>${stats.statusBreakdown.rejected}</td><td>${((stats.statusBreakdown.rejected / total) * 100).toFixed(1)}%</td></tr>
     </table>
   `;
 
@@ -307,6 +360,7 @@ export function renderAdminView(root, session, onLogout) {
 }
 
 function setupAdminListeners(onLogout, session) {
+  adminSession = session;
   const content = document.getElementById("admin-dynamic-content");
   const navButtons = document.querySelectorAll(".nav-item:not(.logout)");
 
@@ -327,11 +381,12 @@ function setupAdminListeners(onLogout, session) {
 function renderSection(target, container) {
   if (target === "staff") {
     renderStaffManager(container);
-  } else if(target === "reports"){
-    const stats = getAnalytics(); 
+  } else if (target === "reports") {
+    const stats = getAnalytics();
+    window.lastReportStats = stats;
     container.innerHTML = renderReports(stats);
-  }else if (target === "logs") {
-      renderLogsView(container);
+  } else if (target === "logs") {
+    renderLogsView(container);
   } else if (target === "students") {
     renderStudentViewer(container);
   } else if (target === "announcements") {
@@ -374,11 +429,9 @@ function renderSection(target, container) {
       // 3. Unshift places the newly written message at index [0] so it displays at the top of the feed
       currentFeed.unshift(newBroadcast);
 
-      // 4. Commit back to localStorage using the plural key name
+      // 4. Commit back to localStorage (other open tabs pick it up via the storage event)
       localStorage.setItem("gh_global_broadcasts", JSON.stringify(currentFeed));
-
-      // 5. Force a cross-window synchronization event manually for real-time reactivity
-      window.dispatchEvent(new Event("storage"));
+      window.logActivity(adminSession, "Posted a global announcement");
 
       alert("Broadcast posted successfully to all user dashboards!");
       msgInput.value = "";
@@ -392,7 +445,7 @@ function renderSection(target, container) {
 export function renderLogsView(container) {
   // 1. Initial Data Load
   const allLogs = JSON.parse(localStorage.getItem("gh_activity_logs") || "[]");
-  
+
   // 2. Render the layout with Search Bar
   container.innerHTML = `
     <div class="admin-card">
@@ -410,10 +463,13 @@ export function renderLogsView(container) {
 
   // 3. Render Table Function
   const updateTable = (filterText = "") => {
-    const filtered = allLogs.filter(log => 
-      log.action.toLowerCase().includes(filterText.toLowerCase()) ||
-      log.userName.toLowerCase().includes(filterText.toLowerCase())
-    ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const filtered = allLogs
+      .filter(
+        (log) =>
+          log.action.toLowerCase().includes(filterText.toLowerCase()) ||
+          log.userName.toLowerCase().includes(filterText.toLowerCase()),
+      )
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
     tableContainer.innerHTML = `
       <table class="admin-table">
@@ -421,14 +477,18 @@ export function renderLogsView(container) {
           <tr><th>Time</th><th>User</th><th>Role</th><th>Action</th></tr>
         </thead>
         <tbody>
-          ${filtered.map(log => `
+          ${filtered
+            .map(
+              (log) => `
             <tr>
               <td>${new Date(log.timestamp).toLocaleString()}</td>
-              <td>${log.userName}</td>
-              <td>${log.userRole}</td>
-              <td>${log.action}</td>
+              <td>${escapeHtml(log.userName)}</td>
+              <td>${escapeHtml(log.userRole)}</td>
+              <td>${escapeHtml(log.action)}</td>
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     `;
@@ -442,61 +502,126 @@ export function renderLogsView(container) {
 }
 
 function renderStudentViewer(container) {
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const students = users.filter((u) => u.role === "student");
+  const students = getUsers().filter((u) => u.role === "student");
+  const activeCount = students.filter((s) => s.active !== false).length;
 
   container.innerHTML = `
         <div class="admin-card full-width">
-            <div class="card-header">
-                <h2><i class="material-icons">school</i> Registered Students Roster</h2>
-                <span style="font-size: 0.9rem; color: #64748b; font-weight: 500; background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">
-                    Total: ${students.length} System Records
-                </span>
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div>
+                    <h2><i class="material-icons">school</i> Registered Students</h2>
+                    <p class="subtitle" style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem;">${activeCount} active · ${students.length - activeCount} deactivated</p>
+                </div>
+                <input type="text" id="rosterSearch" placeholder="Search name, email, course..." style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; min-width: 0; width: 260px; max-width: 100%;">
             </div>
             <div class="table-container">
-                <table class="admin-table">
+                <table class="admin-table" id="rosterTable">
                     <thead>
                         <tr>
-                            <th>Student ID / Name</th>
+                            <th>Student</th>
                             <th>Email Address</th>
-                            <th>Course Profile</th>
-                            <th style="text-align: right;">Account Status</th>
+                            <th>Course</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${
                           students.length > 0
                             ? students
-                                .map(
-                                  (s) => `
+                                .map((s) => {
+                                  const active = s.active !== false;
+                                  return `
                             <tr>
-                                <td data-label="Student ID / Name">
+                                <td data-label="Student">
                                     <div style="display: flex; flex-direction: column;">
-                                        <strong style="color: #1e293b;">${s.name}</strong>
-                                        <span style="font-size: 0.75rem; color: #64748b; font-family: monospace;">UID: ${s.id || "N/A"}</span>
+                                        <strong style="color: #1e293b;">${escapeHtml(s.name)}</strong>
+                                        <span style="font-size: 0.75rem; color: #64748b; font-family: monospace;">@${escapeHtml(s.user)} · ${escapeHtml(s.yearLevel || "")}</span>
                                     </div>
                                 </td>
-                                <td data-label="Email Address" style="color: #475569;">${s.email}</td>
-                                <td data-label="Course Profile">
+                                <td data-label="Email" style="color: #475569;">${escapeHtml(s.email)}</td>
+                                <td data-label="Course">
                                     <span style="background: #eff6ff; color: #1e40af; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
-                                        ${s.course || "Unassigned"}
+                                        ${escapeHtml(s.course || "Unassigned")} ${escapeHtml(s.section || "")}
                                     </span>
                                 </td>
-                                <td data-label="Account Status" style="text-align: right;">
-                                    <span class="badge status-pill approved" style="font-size: 0.75rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 2px 8px;">Active</span>
+                                <td data-label="Status">
+                                    <span class="status-pill ${active ? "approved" : "cancelled"}">${active ? "Active" : "Deactivated"}</span>
+                                </td>
+                                <td data-label="Actions" style="text-align: right;">
+                                    <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                                        <button type="button" class="roster-btn" onclick="window.resetStudentPassword(${s.id})">
+                                            <i class="material-icons">key</i> Reset password
+                                        </button>
+                                        <button type="button" class="roster-btn ${active ? "danger" : ""}" onclick="window.toggleStudentActive(${s.id})">
+                                            <i class="material-icons">${active ? "block" : "check_circle"}</i> ${active ? "Deactivate" : "Activate"}
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
-                        `,
-                                )
+                        `;
+                                })
                                 .join("")
-                            : '<tr><td colspan="4" style="text-align:center; padding: 2rem;">No registered students found in local database.</td></tr>'
+                            : '<tr><td colspan="5" style="text-align:center; padding: 2rem;">No registered students yet.</td></tr>'
                         }
                     </tbody>
                 </table>
             </div>
         </div>
     `;
+
+  document.getElementById("rosterSearch").oninput = (e) => {
+    const term = e.target.value.toLowerCase().trim();
+    container.querySelectorAll("#rosterTable tbody tr").forEach((row) => {
+      row.style.display = row.textContent.toLowerCase().includes(term)
+        ? ""
+        : "none";
+    });
+  };
 }
+
+window.toggleStudentActive = (id) => {
+  const users = getUsers();
+  const student = users.find((u) => u.id === id);
+  if (!student) return;
+  const deactivating = student.active !== false;
+
+  if (
+    deactivating &&
+    !window.confirm(
+      `Deactivate ${student.name}? They won't be able to sign in until you activate the account again.`,
+    )
+  ) {
+    return;
+  }
+
+  student.active = !deactivating;
+  saveUsers(users);
+  window.logActivity(
+    adminSession,
+    `${deactivating ? "Deactivated" : "Activated"} student account ${student.name}`,
+  );
+  renderStudentViewer(document.getElementById("admin-dynamic-content"));
+};
+
+window.resetStudentPassword = async (id) => {
+  const users = getUsers();
+  const student = users.find((u) => u.id === id);
+  if (!student) return;
+  if (!window.confirm(`Reset the password for ${student.name}?`)) return;
+
+  // Readable temporary password, e.g. "gg-7k2m9p"
+  const temp = `gg-${Math.random().toString(36).slice(2, 8)}`;
+  student.pass = await hashPassword(temp);
+  saveUsers(users);
+  window.logActivity(adminSession, `Reset password for ${student.name}`);
+
+  // prompt() shows the password in a selectable field so it can be copied
+  window.prompt(
+    `Temporary password for ${student.name}. Copy it now; it won't be shown again. They can change it with "Forgot Password".`,
+    temp,
+  );
+};
 
 // --- MODAL ENGINE OPERATIONAL CONTROLS ---
 
@@ -515,8 +640,9 @@ function setupModalHandlers() {
     }
   };
 
-  saveBtn.onclick = () => {
-    const id = document.getElementById("counselorIdField").value;
+  saveBtn.onclick = async () => {
+    const id =
+      Number(document.getElementById("counselorIdField").value) || null;
     const name = document.getElementById("counselorNameField").value.trim();
     const email = document.getElementById("counselorEmailField").value.trim();
     const specialty = document.getElementById("counselorSpecialtyField").value;
@@ -529,21 +655,38 @@ function setupModalHandlers() {
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+    const users = getUsers();
+    const username = email.split("@")[0];
+    const taken = users.some(
+      (u) => u.id !== id && (u.email === email || u.user === username),
+    );
+    if (taken) {
+      alert("Another account already uses this email or username.");
+      return;
+    }
 
     if (id) {
       const index = users.findIndex((u) => u.id === id);
       if (index !== -1) {
+        // Keep the counselor's name current on their appointments
+        if (users[index].name !== name) {
+          saveAppointments(
+            getAppointments().map((a) =>
+              a.counselorId === id ? { ...a, counselorName: name } : a,
+            ),
+          );
+        }
         users[index].name = name;
         users[index].email = email;
         [users[index].user] = email.split("@");
         users[index].specialty = specialty; // Save modified specialty parameter
 
         if (password) {
-          users[index].pass = password;
+          users[index].pass = await hashPassword(password);
         }
 
-        localStorage.setItem("gh_users", JSON.stringify(users));
+        saveUsers(users);
+        window.logActivity(adminSession, `Updated counselor ${name}`);
         alert("Counselor profiles updated successfully!");
       }
     } else {
@@ -556,14 +699,16 @@ function setupModalHandlers() {
         id: Date.now(),
         name,
         email,
-        user: email.split("@")[0],
-        pass: password,
+        user: username,
+        pass: await hashPassword(password),
         role: "guidance",
         specialty, // Bind custom focus value to record object schema
+        active: true,
       };
 
       users.push(newUser);
-      localStorage.setItem("gh_users", JSON.stringify(users));
+      saveUsers(users);
+      window.logActivity(adminSession, `Added counselor ${name}`);
       alert("Counselor initialization complete!");
     }
 
@@ -608,16 +753,91 @@ window.openEditCounselorModal = (id) => {
 };
 
 window.removeUser = (id) => {
-  if (window.confirm("Are you sure you want to remove this staff member?")) {
-    const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-    const filtered = users.filter((u) => u.id !== id);
-    localStorage.setItem("gh_users", JSON.stringify(filtered));
+  const counselor = getUsers().find((u) => u.id === id);
+  if (!counselor) return;
 
-    const content = document.getElementById("admin-dynamic-content");
-    renderStaffManager(content);
+  // Don't leave students with appointments pointing at a deleted counselor
+  const active = getAppointments().filter(
+    (a) => a.counselorId === id && ["pending", "approved"].includes(a.status),
+  );
+  const question = active.length
+    ? `${counselor.name} has ${active.length} pending or approved appointment(s). They will move back to the shared queue so another counselor can take them. Delete ${counselor.name}?`
+    : `Are you sure you want to remove ${counselor.name}?`;
+  if (!window.confirm(question)) return;
+
+  if (active.length) {
+    const activeIds = active.map((a) => a.id);
+    saveAppointments(
+      getAppointments().map((a) =>
+        activeIds.includes(a.id)
+          ? {
+              ...a,
+              counselorId: null,
+              counselorName: "Unassigned",
+              status: "pending",
+              updatedAt: new Date().toISOString(),
+            }
+          : a,
+      ),
+    );
+    active.forEach((a) =>
+      addNotification(
+        a.studentId,
+        `Your ${a.type} session on ${a.date} is being moved to another counselor. It is pending again until they confirm.`,
+      ),
+    );
   }
+
+  saveUsers(getUsers().filter((u) => u.id !== id));
+  saveBlocks(getBlocks().filter((b) => b.counselorId !== id));
+  window.logActivity(adminSession, `Deleted counselor ${counselor.name}`);
+  renderStaffManager(document.getElementById("admin-dynamic-content"));
 };
 
+// Download every appointment as a spreadsheet-friendly CSV file
+window.exportAppointmentsCsv = () => {
+  const header = [
+    "Date",
+    "Time",
+    "Student",
+    "Student Email",
+    "Counselor",
+    "Type",
+    "Status",
+    "Student Notes",
+    "Counselor Notes",
+    "Rating",
+    "Created",
+  ];
+  const rows = getAppointments()
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+    .map((a) => [
+      a.date,
+      formatTime12(a.time),
+      a.studentName,
+      a.studentEmail,
+      a.counselorName || "Unassigned",
+      a.type,
+      a.status,
+      a.notes,
+      a.counselorNotes,
+      a.feedback?.rating ?? "",
+      a.createdAt,
+    ]);
+  // Private case notes are intentionally left out of the export
+  // Leading byte-order mark so Excel reads the file as UTF-8
+  const blob = new Blob([String.fromCharCode(0xfeff), toCsv([header, ...rows])], {
+    type: "text/csv;charset=utf-8",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `granby-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  window.logActivity(adminSession, "Exported appointments CSV");
+};
 
 function getAnalytics() {
   const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
@@ -636,8 +856,29 @@ function getAnalytics() {
     approved: 0,
     rejected: 0,
     cancelled: 0,
+    completed: 0,
+    "no-show": 0,
   };
   const dailyTrends = {};
+
+  // Student feedback on completed sessions
+  const rated = apps.filter((a) => a.feedback?.rating);
+  const average = (list) =>
+    (list.reduce((sum, a) => sum + a.feedback.rating, 0) / list.length).toFixed(
+      1,
+    );
+  const byCounselor = Object.values(
+    rated.reduce((groups, a) => {
+      const key = a.counselorName || "Unassigned";
+      (groups[key] ||= { name: key, list: [] }).list.push(a);
+      return groups;
+    }, {}),
+  ).map((g) => ({ name: g.name, count: g.list.length, avg: average(g.list) }));
+  const ratings = {
+    overall: rated.length ? average(rated) : null,
+    count: rated.length,
+    byCounselor,
+  };
 
   apps.forEach((app) => {
     const statusKey = app.status?.toLowerCase();
@@ -646,7 +887,7 @@ function getAnalytics() {
     const date = new Date(app.createdAt || Date.now()).toLocaleDateString();
     dailyTrends[date] = (dailyTrends[date] || 0) + 1;
 
-    const student = users.find((u) => u.email === app.studentEmail);
+    const student = users.find((u) => u.id === app.studentId);
     if (student) {
       if (student.yearLevel && yearBreakdown[student.yearLevel] !== undefined)
         yearBreakdown[student.yearLevel]++;
@@ -657,6 +898,12 @@ function getAnalytics() {
     }
   });
 
+  const typeCount = (word) =>
+    apps.filter((a) => a.type?.toLowerCase().includes(word)).length;
+  const academic = typeCount("academic");
+  const personal = typeCount("personal");
+  const career = typeCount("career");
+
   const dates = Object.keys(dailyTrends);
   const avgDaily = dates.length ? (apps.length / dates.length).toFixed(1) : 0;
 
@@ -665,17 +912,18 @@ function getAnalytics() {
     approved: statusBreakdown.approved,
     pending: statusBreakdown.pending,
     totalStudents: users.filter((u) => u.role === "student").length,
-    academic: apps.filter((a) => a.type?.toLowerCase().includes("academic"))
-      .length,
-    personal: apps.filter((a) => a.type?.toLowerCase().includes("personal"))
-      .length,
-    career: apps.filter((a) => a.type?.toLowerCase().includes("career")).length,
+    academic,
+    personal,
+    career,
+    // Family, bullying, grief, scholarship, etc.
+    otherTypes: apps.length - academic - personal - career,
     yearBreakdown,
     courseBreakdown,
     statusBreakdown,
+    ratings,
     avgDaily,
     mostActiveYear: Object.keys(yearBreakdown).reduce(
-      (a, b) => (yearBreakdown[a] > yearBreakdown[b] ? a : b),
+      (a, b) => (yearBreakdown[b] > (yearBreakdown[a] || 0) ? b : a),
       "N/A",
     ),
   };

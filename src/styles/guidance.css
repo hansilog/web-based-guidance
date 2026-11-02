@@ -816,7 +816,6 @@ td {
   }
 
   /* 4. Hide all text labels and extra menu UI */
-  .notification-wrapper,
   .sidebar-header,
   .sidebar h2,
   .nav-label,

@@ -1,4 +1,3 @@
-import { gapi } from "gapi-script";
 
 /**
  * GRANBY GATEWAY - GOOGLE CALENDAR SYNC ENGINE
@@ -9,7 +8,7 @@ import { gapi } from "gapi-script";
 // Replace this placeholder string with the client ID from your Google Cloud Console
 const CLIENT_ID =
   "842259520040-fvotbl74ulldonh855onveca5ta7hm9p.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/calendar";
+const SCOPES = "https://www.googleapis.com/auth/calendar.events";
 
 let tokenClient = null;
 let accessToken = null;
@@ -50,23 +49,10 @@ export function initGoogleAuth(onStatusUpdate) {
 
         // Save the active authentication string token parameter state
         accessToken = tokenResponse.access_token;
-        localStorage.setItem("gh_gcal_token", accessToken);
+        sessionStorage.setItem("gh_gcal_token", accessToken);
 
         if (onStatusUpdate) onStatusUpdate(true);
       },
-    });
-
-    // C. Spin up the legacy GAPI core layer to ensure network requests format properly
-    gapi.load("client", async () => {
-      try {
-        await gapi.client.init({
-          clientId: CLIENT_ID,
-          scope: SCOPES,
-        });
-        console.log("⚡ GAPI Client Core successfully mounted.");
-      } catch (err) {
-        console.error("❌ Failed initializing internal GAPI Client:", err);
-      }
     });
   };
 
@@ -89,7 +75,7 @@ export function handleSignIn() {
         scope: SCOPES,
         callback: (tokenResponse) => {
           accessToken = tokenResponse.access_token;
-          localStorage.setItem("gh_gcal_token", accessToken);
+          sessionStorage.setItem("gh_gcal_token", accessToken);
         },
       });
       tokenClient.requestAccessToken({ prompt: "consent" });
@@ -108,7 +94,7 @@ export function handleSignIn() {
  */
 export function handleSignOut() {
   accessToken = null;
-  localStorage.removeItem("gh_gcal_token");
+  sessionStorage.removeItem("gh_gcal_token");
   console.log("🔒 Disconnected from Google Services.");
 }
 
@@ -119,7 +105,7 @@ export function handleSignOut() {
  */
 export async function createCalendarEvent(details) {
   // Check memory state first, fall back to local database storage configurations
-  const token = accessToken || localStorage.getItem("gh_gcal_token");
+  const token = accessToken || sessionStorage.getItem("gh_gcal_token");
 
   if (!token) {
     alert(

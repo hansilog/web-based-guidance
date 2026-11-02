@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 /**
  * GRANBY GATEWAY - CENTRAL AI MODULE
- * Powered by Google Gemini 2.5 Flash
+ * Powered by Google Gemini 3.8 Flash
  */
 
 /**
@@ -10,32 +10,19 @@ import { GoogleGenAI } from "@google/genai";
  * Prevents key leaks on public hosting domains like GitHub Pages.
  */
 function getGenAIClient() {
-  // 1. Try to read the key from the browser's session storage
-  let apiKey = sessionStorage.getItem("gh_gemini_key");
+  // 1. When running `npm start`, webpack.dev.js injects the key from .env
+  // eslint-disable-next-line no-undef
+  let apiKey = typeof __GEMINI_API_KEY__ !== "undefined" ? __GEMINI_API_KEY__ : "";
 
-  // 2. Fallback: If working locally, check if an environment variable exists
-  if (
-    !apiKey &&
-    typeof process !== "undefined" &&
-    process.env &&
-    process.env.GEMINI_API_KEY
-  ) {
-    apiKey = process.env.GEMINI_API_KEY;
-  } else if (
-    !apiKey &&
-    import.meta &&
-    import.meta.env &&
-    import.meta.env.VITE_GEMINI_API_KEY
-  ) {
-    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  }
+  // 2. Fallback: a key typed into the prompt earlier this browser session
+  if (!apiKey) apiKey = sessionStorage.getItem("gh_gemini_key");
 
   // 3. Emergency Prompter: If no key is found anywhere, securely prompt the user once
   if (!apiKey) {
     apiKey = prompt(
       "🤖 [Granby Gateway AI Activation]\n\nPlease enter a valid Gemini API Key to initialize the campus chat assistant. This key is stored safely inside your current browser session tab only:",
     );
-    if (apiKey && apiKey.trim().startsWith("AIzaSy")) {
+    if (apiKey && apiKey.trim()) {
       sessionStorage.setItem("gh_gemini_key", apiKey.trim());
     } else {
       alert(
@@ -47,6 +34,48 @@ function getGenAIClient() {
 
   // Return a fresh client instance built using the secure key token
   return new GoogleGenAI({ apiKey });
+}
+
+const MODEL = "gemini-3.8-flash";
+const RETRYABLE = [429, 500, 503];
+
+function errorStatus(error) {
+  return Number(error?.status || error?.code || error?.error?.code) || 0;
+}
+
+/**
+ * generateContent with a couple of retries for busy/rate-limited responses,
+ * which the free tier returns often when messages are sent close together.
+ */
+async function generateWithRetry(aiClient, request, retries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await aiClient.models.generateContent({ model: MODEL, ...request });
+    } catch (error) {
+      if (attempt >= retries || !RETRYABLE.includes(errorStatus(error))) {
+        throw error;
+      }
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+}
+
+// A short, specific explanation instead of one generic "offline" line
+function friendlyError(error) {
+  const status = errorStatus(error);
+  if (status === 429) {
+    return "⏳ Too many questions at once. Please wait a few seconds and try again.";
+  }
+  if (status === 503 || status === 500) {
+    return "⏳ The AI service is busy right now. Please try again in a moment.";
+  }
+  if (status === 400 || status === 401 || status === 403) {
+    return "⚠️ The AI key is invalid or not allowed. Please ask the admin to check the Gemini API key.";
+  }
+  if (status === 404) {
+    return "⚠️ The AI model is unavailable. Please ask the admin to update the Gemini model name.";
+  }
+  return "⚠️ The AI helper is temporarily offline. Please look at standard guidelines or proceed with scheduling a slot with your counselor.";
 }
 
 /**
@@ -94,8 +123,7 @@ export async function getPreBookingAdvice(
   5. Keep your total response friendly, accurate, and limited to a maximum of 3 sentences.
     `;
 
-    const response = await aiClient.models.generateContent({
-      model: "gemini-2.5-flash",
+    const response = await generateWithRetry(aiClient, {
       contents: `Context: ${selectedCategory}. Question: ${studentNote}`,
       config: {
         systemInstruction,
@@ -103,10 +131,14 @@ export async function getPreBookingAdvice(
       },
     });
 
-    return response.text;
+    // Blocked or empty answers come back without text
+    return (
+      response.text ||
+      "🤔 I can't answer that one. Try asking about campus offices, documents, or counseling."
+    );
   } catch (error) {
     console.error("❌ Gemini API Chat Error:", error);
-    return "⚠️ The AI helper is temporarily offline. Please look at standard guidelines or proceed with scheduling a slot with your counselor.";
+    return friendlyError(error);
   }
 }
 
@@ -118,7 +150,7 @@ export async function generateStudentSummary(
   appointmentHistory = [],
 ) {
   if (appointmentHistory.length === 0) {
-    return "💡 <em>This student has no past session records on file. The upcoming appointment will be their initial intake consultation.</em>";
+    return "💡 This student has no past session records on file. The upcoming appointment will be their initial intake consultation.";
   }
 
   // Initialize the client securely at runtime
@@ -131,7 +163,7 @@ export async function generateStudentSummary(
     const historyLogs = appointmentHistory
       .map(
         (app) =>
-          `- Date: ${app.date}, Type: ${app.type}, Status: ${app.status}, Student Notes: "${app.notes || "None"}"`,
+          `- Date: ${app.date}, Type: ${app.type}, Status: ${app.status}, Student Notes: "${app.notes || "None"}", Counselor Notes: "${app.counselorNotes || "None"}", Private Case Notes: "${app.caseNotes || "None"}"${app.followUp ? ", Follow-up recommended" : ""}`,
       )
       .join("\n");
 
@@ -146,14 +178,14 @@ export async function generateStudentSummary(
       - Bullet 3 (Actionable Tip): One suggested proactive talking point or recommendation for the counselor's upcoming face-to-face dialogue.
     `;
 
-    const response = await aiClient.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await generateWithRetry(aiClient, { contents: prompt });
 
-    return response.text;
+    return (
+      response.text ||
+      "⚠️ Unable to summarize this history right now. Please read the session entries below."
+    );
   } catch (error) {
     console.error("❌ Gemini API Summary Error:", error);
-    return "⚠️ <em>Unable to parse historical ledger trends automatically at this time. Please read raw history entries manually below.</em>";
+    return "⚠️ Unable to summarize this history right now. Please read the session entries below.";
   }
 }

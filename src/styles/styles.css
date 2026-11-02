@@ -249,3 +249,1005 @@ body {
 
 /* Placeholder for the banner to reserve space even when empty */
 /* Reserved slot that keeps the layout stable */
+
+/* =========================================================
+   SHARED FEATURE STYLES (slots, dialogs, bell, case files,
+   counselor calendar). Loaded after the portal stylesheets.
+   ========================================================= */
+
+/* --- Status pills for every appointment status --- */
+.status-pill {
+  display: inline-block;
+  white-space: nowrap;
+}
+.status-pill.cancelled {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.status-pill.completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.status-pill.no-show {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.faded-row {
+  opacity: 0.6;
+  background-color: #f8fafc;
+}
+
+/* --- Student row actions --- */
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #2563eb;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.row-action i {
+  font-size: 18px;
+}
+.row-action:hover {
+  background: #dbeafe;
+}
+.row-action.danger {
+  border-color: #fecaca;
+  background: #fff5f5;
+  color: #dc2626;
+}
+.row-action.danger:hover {
+  background: #fee2e2;
+}
+.row-action:focus-visible,
+.slot-btn:focus-visible,
+.act-btn:focus-visible,
+.case-link:focus-visible,
+.cal-day-head:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.muted-icon {
+  color: #94a3b8;
+  font-size: 18px;
+  vertical-align: middle;
+}
+.done-icon {
+  color: #10b981;
+  font-size: 18px;
+  vertical-align: middle;
+}
+.muted-dash {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* --- Time slot picker --- */
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.slot-btn {
+  padding: 10px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.15s ease;
+}
+.slot-btn:hover:not([disabled]) {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+.slot-btn.selected {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.slot-btn[disabled] {
+  background: #f1f5f9;
+  color: #94a3b8;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.slot-hint {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+.slot-hint.warn {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+/* --- Top bar: hamburger + bell --- */
+.portal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.hamburger-btn {
+  display: none;
+  margin-right: auto;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+/* Between 769px and 1023px the student sidebar slides off-screen;
+   below 769px it becomes a top bar, so the button is only needed in between */
+@media screen and (min-width: 769px) and (max-width: 1023px) {
+  .hamburger-btn {
+    display: inline-flex;
+  }
+}
+
+/* Let the main column shrink so wide tables scroll instead of pushing the page */
+.dashboard-main-col {
+  min-width: 0;
+}
+.table-responsive {
+  overflow-x: auto;
+}
+.notification-wrapper {
+  position: relative;
+}
+.bell-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bell-btn:hover {
+  background: #f8fafc;
+}
+.notification-dropdown {
+  width: min(320px, calc(100vw - 32px));
+}
+.notif-body {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.notif-item p {
+  margin: 0 0 2px;
+  color: #334155;
+  line-height: 1.4;
+}
+.notif-item small {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+.notif-item.unread {
+  background: #eff6ff;
+}
+.notif-clear {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.empty-notif {
+  padding: 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+/* --- Shared dialogs (ui.js openModal) --- */
+.app-modal-card {
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 16px;
+}
+.app-modal-card.wide {
+  max-width: 720px;
+}
+.modal-icon {
+  color: #2563eb;
+  font-size: 28px;
+}
+.modal-icon.danger {
+  color: #ef4444;
+}
+.app-modal-body {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+.app-modal-body p {
+  margin: 0;
+}
+.modal-error {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+.modal-error.hidden {
+  display: none;
+}
+.modal-lead {
+  color: #334155;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.modal-quote {
+  margin-top: 8px !important;
+  padding: 8px 12px;
+  border-left: 3px solid #cbd5e1;
+  color: #475569;
+  font-style: italic;
+  font-size: 0.88rem;
+}
+.modal-label {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #334155;
+}
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+  resize: vertical;
+}
+.modal-input:focus {
+  outline: 2px solid #bfdbfe;
+  border-color: #2563eb;
+}
+.modal-hint {
+  margin-top: 8px !important;
+  color: #64748b;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.modal-hint i {
+  font-size: 14px;
+}
+.modal-check {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #334155;
+  cursor: pointer;
+}
+.modal-btn.confirm-btn {
+  background-color: #2563eb;
+  color: #fff;
+}
+.modal-btn.confirm-btn:hover {
+  background-color: #1d4ed8;
+}
+.modal-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* --- Star rating --- */
+.star-picker {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+}
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  line-height: 1;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.star-btn.on,
+.star-btn:hover {
+  color: #f59e0b;
+}
+.stars {
+  color: #f59e0b;
+  letter-spacing: 1px;
+}
+
+/* --- Student history details --- */
+.history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.history-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+.history-note i {
+  font-size: 15px;
+}
+.history-note.accent {
+  color: #2563eb;
+  font-weight: 600;
+}
+.history-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.history-item.completed .history-icon {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.history-item.no-show .history-icon,
+.history-item.cancelled .history-icon {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* --- Counselor appointment table --- */
+.table-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#statusFilter {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.action-btns {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.action-btns .act-btn {
+  width: auto;
+  height: auto;
+}
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.act-btn i {
+  font-size: 16px;
+}
+.act-btn.approve {
+  background: #dcfce7;
+  color: #166534;
+}
+.act-btn.reject {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.act-btn.complete {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.act-btn.noshow {
+  background: #f1f5f9;
+  color: #475569;
+}
+.act-btn:hover {
+  filter: brightness(0.95);
+}
+.row-note {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+.row-note.stars {
+  font-style: normal;
+  color: #f59e0b;
+}
+.row-sub {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #64748b;
+  max-width: 240px;
+}
+.row-sub.accent {
+  color: #b45309;
+  font-weight: 600;
+}
+.case-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #1d4ed8;
+  cursor: pointer;
+  text-align: left;
+}
+.case-link:hover {
+  text-decoration: underline;
+}
+.case-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.case-btn i {
+  font-size: 16px;
+}
+.case-btn:hover {
+  text-decoration: none;
+  background: #dbeafe;
+}
+
+/* --- Case file --- */
+.case-profile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 0.88rem;
+  color: #1e293b;
+}
+.case-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 600;
+}
+.ai-summary-box {
+  margin-top: 14px;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: #faf5ff;
+}
+.ai-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #ede9fe;
+  font-weight: 600;
+  color: #5b21b6;
+}
+.ai-summary-head span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-summary-output {
+  padding: 12px;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: #334155;
+}
+.case-heading {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+.case-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.case-entry {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.case-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+.case-entry-meta {
+  margin: 2px 0 6px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+.case-line {
+  font-size: 0.84rem;
+  color: #334155;
+  margin-top: 4px;
+}
+.case-line > span:first-child {
+  font-weight: 600;
+  color: #475569;
+}
+.case-line.private {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fefce8;
+}
+.case-line.private i {
+  font-size: 13px;
+  vertical-align: -2px;
+}
+.case-line.accent {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* --- Counselor week calendar --- */
+.cal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cal-nav {
+  display: flex;
+  gap: 6px;
+}
+.cal-nav .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+}
+.cal-help {
+  margin: 4px 0 10px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  color: #475569;
+}
+.cal-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  margin-right: -8px;
+}
+.cal-dot.pending,
+.cal-event.pending {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+.cal-dot.approved,
+.cal-event.approved {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+.cal-dot.completed,
+.cal-event.completed {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+.cal-dot.no-show,
+.cal-event.no-show {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+.cal-dot.off {
+  background: repeating-linear-gradient(
+    45deg,
+    #e2e8f0,
+    #e2e8f0 3px,
+    #f8fafc 3px,
+    #f8fafc 6px
+  );
+}
+.cal-scroll {
+  overflow-x: auto;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: 76px repeat(5, minmax(120px, 1fr));
+  min-width: 680px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cal-corner,
+.cal-day-head,
+.cal-time,
+.cal-cell {
+  border-right: 1px solid #eef2f6;
+  border-bottom: 1px solid #eef2f6;
+}
+.cal-corner {
+  background: #f8fafc;
+}
+.cal-day-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  background: #f8fafc;
+  border-top: none;
+  border-left: none;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #1e293b;
+  cursor: pointer;
+}
+.cal-day-head small {
+  font-weight: 500;
+  font-size: 0.7rem;
+  color: #10b981;
+}
+.cal-day-head.off small {
+  color: #dc2626;
+}
+.cal-day-head.today {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.cal-day-head:hover {
+  background: #e2e8f0;
+}
+.cal-time {
+  padding: 8px;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  background: #fcfdfe;
+}
+.cal-cell {
+  min-height: 58px;
+  padding: 4px;
+}
+.cal-cell.off {
+  background: repeating-linear-gradient(
+    45deg,
+    #f1f5f9,
+    #f1f5f9 6px,
+    #f8fafc 6px,
+    #f8fafc 12px
+  );
+}
+.cal-event {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  text-align: left;
+  color: #1e293b;
+}
+.cal-event span {
+  color: #475569;
+}
+.cal-event:hover {
+  text-decoration: none;
+  filter: brightness(0.97);
+}
+
+/* --- Admin roster + reports --- */
+.roster-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.roster-btn i {
+  font-size: 16px;
+}
+.roster-btn.danger {
+  border-color: #fecdd3;
+  background: #fff5f5;
+  color: #e11d48;
+}
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.report-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- Booking: urgent requests, privacy note --- */
+.urgent-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.urgent-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+}
+.urgent-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #dc2626;
+  flex-shrink: 0;
+}
+.urgent-help {
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.urgent-help ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.urgent-help a {
+  color: #b91c1c;
+  font-weight: 700;
+}
+.privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #475569;
+  font-size: 0.85rem;
+}
+.privacy-note .material-icons {
+  font-size: 18px;
+  color: var(--primary);
+}
+
+/* --- Student calendar: legend + date picking --- */
+/* Dashboard calendar starts collapsed; the summary row toggles it */
+.calendar-toggle {
+  background: #fff;
+  padding: 16px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.calendar-toggle summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 800;
+  color: #0f172a;
+  user-select: none;
+}
+.calendar-toggle summary::-webkit-details-marker {
+  display: none;
+}
+.calendar-toggle summary .material-icons {
+  font-size: 20px;
+  color: var(--primary);
+}
+.calendar-toggle summary .chevron {
+  margin-left: auto;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+.calendar-toggle[open] summary {
+  margin-bottom: 12px;
+}
+.calendar-toggle[open] summary .chevron {
+  transform: rotate(180deg);
+}
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+.cal-nav[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.day-num.closed {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+.day-num.closed:hover {
+  background: none !important;
+  color: #cbd5e1 !important;
+}
+.day-num.pickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.day-num.selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  font-weight: 800;
+}
+.day-num.has-pending {
+  position: relative;
+}
+.day-num.has-pending::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  width: 4px;
+  height: 4px;
+  background: #f59e0b;
+  border-radius: 50%;
+}
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.cal-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.legend-dot.approved {
+  background: var(--primary);
+}
+.legend-dot.pending {
+  background: #f59e0b;
+}
+.legend-dot.closed {
+  background: #cbd5e1;
+}
+.cal-hint {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+/* --- Booking: Preferred Date field ---
+   Matches the selects above it and overrides the login page's green/red validation look */
+.styled-form .form-group input.date-field,
+.styled-form .form-group input.date-field:valid,
+.styled-form .form-group input.date-field:invalid {
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border: 2px solid #f1f5f9;
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: none;
+  color: #0f172a;
+  font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.styled-form .form-group input.date-field.empty {
+  color: #94a3b8;
+}
+.styled-form .form-group input.date-field:hover {
+  border-color: #e2e8f0;
+}
+.styled-form .form-group input.date-field:focus {
+  border-color: #38bdf8;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
+}
+.styled-form .form-group input.date-field.has-error {
+  border-color: #f87171;
+  background: #fffafa;
+}
+.styled-form .form-group input.date-field.has-error:focus {
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.15);
+}
+.date-field::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+.date-field::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
