@@ -859,3 +859,306 @@ td {
     font-size: 0.7rem;
   }
 }
+
+/* --- COUNSELOR PORTAL: overview + queue polish --- */
+.guidance-portal .view-header {
+  margin-bottom: 1.5rem;
+}
+.guidance-portal .view-header h1 {
+  margin: 0;
+  line-height: 1.2;
+}
+.header-greeting {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+.header-greeting span {
+  font-weight: 400;
+  color: #64748b;
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.overview-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  background: #fff;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  font: inherit;
+  text-align: left;
+  color: #0f172a;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.overview-stat:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+.overview-stat:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.overview-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+.overview-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.overview-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.overview-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.overview-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+.overview-stat.pending .overview-icon {
+  background: #fef3c7;
+  color: #92400e;
+}
+.overview-stat.urgent .overview-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.overview-stat.today .overview-icon {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.overview-stat.to-close .overview-icon {
+  background: #dcfce7;
+  color: #166534;
+}
+.overview-stat.pending.active {
+  border-color: #d97706;
+}
+.overview-stat.urgent.active {
+  border-color: #dc2626;
+}
+.overview-stat.today.active {
+  border-color: #2563eb;
+}
+.overview-stat.to-close.active {
+  border-color: #16a34a;
+}
+
+.overview-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.overview-panel {
+  min-width: 0;
+  padding: 18px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+.overview-panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.overview-panel h3 .material-icons {
+  font-size: 20px;
+  color: #2563eb;
+}
+.panel-list {
+  max-height: 210px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.panel-time {
+  flex-shrink: 0;
+  width: 66px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+.panel-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.panel-main .case-link {
+  font-weight: 600;
+}
+.panel-main small {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+.panel-row .action-btns {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+.panel-empty {
+  margin: 0;
+  padding: 10px 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+.remind-btn {
+  flex-shrink: 0;
+}
+.remind-btn:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: default;
+  filter: none;
+}
+
+.guidance-portal .table-card {
+  padding: 0;
+}
+.guidance-portal .table-header-main {
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.guidance-portal .table-header-main h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.15rem;
+  white-space: nowrap;
+}
+.guidance-portal .table-tools {
+  align-items: center;
+}
+.guidance-portal #tableSearch {
+  width: 200px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.guidance-portal #adminTable th {
+  padding: 10px 12px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.guidance-portal #adminTable td {
+  padding: 12px;
+  vertical-align: middle;
+  font-size: 0.9rem;
+}
+.guidance-portal #adminTable th:first-child,
+.guidance-portal #adminTable td:first-child {
+  padding-left: 20px;
+}
+.guidance-portal #adminTable .date-info {
+  white-space: nowrap;
+}
+.guidance-portal #adminTable .date-info .row-sub {
+  white-space: normal;
+}
+.guidance-portal #adminTable .date-info small {
+  color: #64748b;
+}
+.guidance-portal #adminTable .status-pill {
+  display: inline-block;
+  white-space: nowrap;
+}
+.guidance-portal #adminTable .user-email {
+  overflow-wrap: anywhere;
+}
+.guidance-portal #adminTable tr.urgent-row td:first-child {
+  box-shadow: inset 4px 0 0 #dc2626;
+}
+
+@media screen and (max-width: 1100px) {
+  .overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .overview-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Same look for the other counselor tabs */
+.guidance-portal .admin-card {
+  padding: 22px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+.guidance-portal .admin-card .card-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.15rem;
+}
+.guidance-portal .admin-card .log-container {
+  padding: 8px 0 0;
+}
+.guidance-portal #studentSearch {
+  width: min(320px, 100%);
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.guidance-portal .admin-card .card-header {
+  margin-bottom: 12px;
+}
+
+/* The week buttons share a class name with the student calendar's small arrows */
+.guidance-portal .cal-toolbar .cal-nav {
+  flex-shrink: 0;
+  gap: 8px;
+  width: auto;
+  height: auto;
+  border: 0;
+  background: none;
+}
+.guidance-portal .cal-toolbar .cal-nav .btn-secondary {
+  white-space: nowrap;
+}

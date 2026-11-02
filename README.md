@@ -12,6 +12,8 @@ our title is web based guidance management and scheduling system.
 - Appointment history, Google Calendar sync, Granby AI campus chat
 
 **Guidance counselors**
+- Overview: pending, urgent, today's and needs-closing counts that filter the queue when clicked
+- Today's schedule and a follow-up tracker with one-click reminders to students
 - Appointment queue with status filter; approve (with time change) or reject with a reason
 - Close sessions as Completed (private case notes, follow-up recommendation) or No-show
 - Student case file with full timeline and AI case summary

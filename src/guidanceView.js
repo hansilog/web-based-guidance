@@ -59,9 +59,79 @@ function renderRowActions(app) {
   return `<span class="row-note">Closed</span>`;
 }
 
+// At-a-glance row + today's schedule + follow-ups, shown above the queue
+export function renderOverview({ stats, filter, today, followUps }) {
+  const statCard = (key, icon, label, value, hint) => `
+    <button type="button" class="overview-stat ${key} ${filter === key ? "active" : ""}" data-filter="${key}" aria-pressed="${filter === key}">
+      <span class="overview-icon"><i class="material-icons">${icon}</i></span>
+      <span class="overview-text">
+        <span class="overview-value">${value}</span>
+        <span class="overview-label">${label}</span>
+        <span class="overview-hint">${hint}</span>
+      </span>
+    </button>`;
+
+  return `
+    <div class="overview-stats">
+      ${statCard("pending", "inbox", "Pending Requests", stats.pending, "Waiting for your decision")}
+      ${statCard("urgent", "priority_high", "Urgent", stats.urgent, "Review these first")}
+      ${statCard("today", "today", "Today's Sessions", stats.today, "Approved for today")}
+      ${statCard("to-close", "task_alt", "Needs Closing", stats.toClose, "Session time has passed")}
+    </div>
+
+    <div class="overview-panels">
+      <section class="overview-panel">
+        <h3><i class="material-icons">schedule</i> Today's Schedule</h3>
+        ${
+          today.length
+            ? `<ul class="panel-list">${today
+                .map(
+                  (app) => `
+              <li class="panel-row">
+                <span class="panel-time">${formatTime12(app.time)}</span>
+                <span class="panel-main">
+                  <button type="button" class="case-link" data-student="${app.studentId}" title="Open case file">${escapeHtml(app.studentName)}</button>
+                  <small>${escapeHtml(app.type)}${app.mode ? ` · ${escapeHtml(app.mode)}` : ""}</small>
+                </span>
+                <span class="action-btns">${renderRowActions(app)}</span>
+              </li>`,
+                )
+                .join("")}</ul>`
+            : `<p class="panel-empty">No sessions scheduled today.</p>`
+        }
+      </section>
+
+      <section class="overview-panel">
+        <h3><i class="material-icons">event_repeat</i> Follow-ups to Schedule</h3>
+        ${
+          followUps.length
+            ? `<ul class="panel-list">${followUps
+                .map(
+                  (app) => `
+              <li class="panel-row">
+                <span class="panel-main">
+                  <button type="button" class="case-link" data-student="${app.studentId}" title="Open case file">${escapeHtml(app.studentName)}</button>
+                  <small>${escapeHtml(app.type)} · Last seen ${formatDateShort(app.date)}</small>
+                </span>
+                <button type="button" class="act-btn complete remind-btn" data-id="${app.id}" ${app.followUpRemindedAt ? "disabled" : ""}>
+                  <i class="material-icons">${app.followUpRemindedAt ? "done" : "notifications_active"}</i>
+                  <span>${app.followUpRemindedAt ? "Reminded" : "Remind"}</span>
+                </button>
+              </li>`,
+                )
+                .join("")}</ul>`
+            : `<p class="panel-empty">No follow-ups waiting. Students you recommend for a follow-up appear here until they book again.</p>`
+        }
+      </section>
+    </div>
+  `;
+}
+
 const FILTERS = [
   ["all", "All"],
   ["pending", "Pending"],
+  ["urgent", "Urgent"],
+  ["today", "Today's sessions"],
   ["approved", "Approved"],
   ["to-close", "Needs closing"],
   ["completed", "Completed"],
@@ -103,7 +173,7 @@ export function generateAppointmentsTableHtml(
                         ? appointments
                             .map(
                               (app) => `
-                        <tr class="${["cancelled", "rejected", "no-show"].includes(app.status) ? "faded-row" : ""}">
+                        <tr class="${["cancelled", "rejected", "no-show"].includes(app.status) ? "faded-row" : ""} ${app.urgent && app.status === "pending" ? "urgent-row" : ""}">
                             <td data-label="Student">
                                 <div class="user-info">
                                     <button type="button" class="case-link user-name" data-student="${app.studentId}" title="Open case file">${escapeHtml(app.studentName)}</button>

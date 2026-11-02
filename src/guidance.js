@@ -19,6 +19,7 @@ import {
   addNotification,
   appointmentStart,
   formatTime12,
+  toDateStr,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { renderCounselorCalendar } from "./calendarView.js";
@@ -26,6 +27,7 @@ import { renderCounselorCalendar } from "./calendarView.js";
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
 import {
   generateAppointmentsTableHtml,
+  renderOverview,
   renderDecisionBody,
   renderCloseBody,
   renderCaseFile,
@@ -54,10 +56,39 @@ function getMyAppointments() {
 const needsClosing = (a) =>
   a.status === "approved" && appointmentStart(a) <= new Date();
 
+const isTodaySession = (a) =>
+  a.status === "approved" && a.date === toDateStr(new Date());
+
+const isUrgentRequest = (a) => a.status === "pending" && a.urgent;
+
+// Completed sessions with a recommended follow-up the student hasn't booked yet
+function getFollowUpsDue() {
+  const all = getAppointments();
+  return all
+    .filter(
+      (a) =>
+        a.status === "completed" &&
+        a.followUp &&
+        a.counselorId === currentSession?.id &&
+        !all.some(
+          (b) =>
+            b.studentId === a.studentId &&
+            b.id !== a.id &&
+            ["pending", "approved", "completed"].includes(b.status) &&
+            appointmentStart(b) > appointmentStart(a),
+        ),
+    )
+    .sort((a, b) => appointmentStart(b) - appointmentStart(a));
+}
+
 function matchesFilter(app) {
   switch (tableFilter) {
     case "all":
       return true;
+    case "urgent":
+      return isUrgentRequest(app);
+    case "today":
+      return isTodaySession(app);
     case "to-close":
       return needsClosing(app);
     case "closed":
@@ -89,10 +120,23 @@ export function renderAppointmentsTable() {
       return rank(a) === 4 ? -diff : diff;
     });
 
-  contentContainer.innerHTML = generateAppointmentsTableHtml(
-    sorted,
-    tableFilter,
-  );
+  const mine = getMyAppointments();
+  const today = mine
+    .filter(isTodaySession)
+    .sort((a, b) => appointmentStart(a) - appointmentStart(b));
+
+  contentContainer.innerHTML =
+    renderOverview({
+      stats: {
+        pending: mine.filter((a) => a.status === "pending").length,
+        urgent: mine.filter(isUrgentRequest).length,
+        today: today.length,
+        toClose: mine.filter(needsClosing).length,
+      },
+      filter: tableFilter,
+      today,
+      followUps: getFollowUpsDue(),
+    }) + generateAppointmentsTableHtml(sorted, tableFilter);
   setupTableSearch();
 
   const filterSelect = document.getElementById("statusFilter");
@@ -265,6 +309,20 @@ function openCaseFile(studentId) {
   window.logActivity(currentSession, `Opened case file of ${student.name}`);
 }
 
+// Nudge a student through their notification bell to book the follow-up
+function remindFollowUp(app) {
+  addNotification(
+    app.studentId,
+    `${currentSession.name} recommends a follow-up to your ${app.type} session. You can book it from My History.`,
+  );
+  updateAppointment(app.id, { followUpRemindedAt: new Date().toISOString() });
+  window.logActivity(
+    currentSession,
+    `Sent ${app.studentName} a follow-up reminder`,
+  );
+  refreshCurrentView();
+}
+
 // --- 3. FILTER & STRUCTURAL NAV HANDLERS ---
 
 function setupTableSearch() {
@@ -388,7 +446,7 @@ export function renderGuidanceView(root, session, onLogout) {
   });
 
   root.innerHTML = `
-    <div class="admin-container">
+    <div class="admin-container guidance-portal">
         <aside class="sidebar" id="admin-sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -448,7 +506,7 @@ export function renderGuidanceView(root, session, onLogout) {
             <header class="view-header">
                 <div class="header-info">
                     <h1>Guidance Dashboard</h1>
-                    <span class="status-badge admin-badge">Good day! ${escapeHtml(session.name)}</span>
+                    <p class="header-greeting">Good day, ${escapeHtml(session.name)} <span>· ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span></p>
                 </div>
                 <div class="header-actions">
                     ${renderBellHtml()}
@@ -633,6 +691,27 @@ function setupAdminListeners(onLogout) {
     const caseLink = e.target.closest(".case-link");
     if (caseLink) {
       openCaseFile(Number(caseLink.dataset.student));
+      return;
+    }
+
+    // Stat cards filter the queue; clicking the active card clears it
+    const statCard = e.target.closest(".overview-stat");
+    if (statCard) {
+      const { filter } = statCard.dataset;
+      tableFilter = tableFilter === filter ? "all" : filter;
+      renderAppointmentsTable();
+      return;
+    }
+
+    const remindBtn = e.target.closest(".remind-btn");
+    if (remindBtn) {
+      const app = getAppointments().find(
+        (a) => a.id === Number(remindBtn.dataset.id),
+      );
+      if (app) {
+        remindBtn.disabled = true;
+        remindFollowUp(app);
+      }
       return;
     }
 
