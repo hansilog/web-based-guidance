@@ -603,6 +603,11 @@ export function renderHistory(session = {}) {
 
   const detailLines = (app) => {
     const lines = [];
+    if (app.walkIn) {
+      lines.push(
+        `<span class="history-note"><i class="material-icons">directions_walk</i> Walk-in session recorded by your counselor</span>`,
+      );
+    }
     if (app.rescheduledFrom) {
       lines.push(
         `<span class="history-note"><i class="material-icons">event_repeat</i> Moved from ${formatDate(app.rescheduledFrom.date)}, ${formatTime12(app.rescheduledFrom.time)}</span>`,

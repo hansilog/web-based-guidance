@@ -42,7 +42,11 @@ export function renderCounselorCalendar(container, session) {
   const days = getWeekDays(weekOffset);
   const today = toDateStr(new Date());
   const myApps = getAppointments().filter(
-    (a) => a.counselorId === session.id && SHOWN_STATUSES.includes(a.status),
+    // Walk-ins can start at any minute, so they stay out of the hourly grid
+    (a) =>
+      a.counselorId === session.id &&
+      SHOWN_STATUSES.includes(a.status) &&
+      !a.walkIn,
   );
 
   const cell = (date, time) => {

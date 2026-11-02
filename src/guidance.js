@@ -10,6 +10,7 @@ import { createCalendarEvent } from "./calendar.js";
 import { generateStudentSummary } from "./ai.js";
 import {
   getAppointments,
+  saveAppointments,
   updateAppointment,
   getUsers,
   saveUsers,
@@ -28,6 +29,7 @@ import { renderCounselorCalendar } from "./calendarView.js";
 import {
   generateAppointmentsTableHtml,
   renderOverview,
+  renderWalkInBody,
   renderDecisionBody,
   renderCloseBody,
   renderCaseFile,
@@ -89,6 +91,8 @@ function matchesFilter(app) {
       return isUrgentRequest(app);
     case "today":
       return isTodaySession(app);
+    case "walk-in":
+      return Boolean(app.walkIn);
     case "to-close":
       return needsClosing(app);
     case "closed":
@@ -271,6 +275,85 @@ function openCloseModal(app, status) {
         `Marked ${updated.studentName}'s session on ${updated.date} as ${status}`,
       );
       refreshCurrentView();
+    },
+  });
+}
+
+// Record a visit from a student who came in without booking
+function openWalkInModal() {
+  const now = new Date();
+  const students = getUsers()
+    .filter((u) => u.role === "student" && u.active !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  openModal({
+    title: "Log Walk-in Session",
+    icon: "directions_walk",
+    confirmText: "Save Session",
+    bodyHtml: renderWalkInBody(
+      students,
+      toDateStr(now),
+      `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+    ),
+    onConfirm: ({ card, showError }) => {
+      const student = getUserById(
+        Number(card.querySelector("#walkInStudent").value),
+      );
+      const type = card.querySelector("#walkInType").value;
+      const date = card.querySelector("#walkInDate").value;
+      const time = card.querySelector("#walkInTime").value;
+
+      if (!student) {
+        showError("Please select the student.");
+        return false;
+      }
+      if (!type) {
+        showError("Please select the reason for the visit.");
+        return false;
+      }
+      if (!date || !time) {
+        showError("Please enter the date and time of the visit.");
+        return false;
+      }
+      if (appointmentStart({ date, time }) > new Date()) {
+        showError("A walk-in can't be in the future.");
+        return false;
+      }
+
+      const stamp = new Date().toISOString();
+      const walkIn = {
+        id: Date.now(),
+        studentId: student.id,
+        studentName: student.name,
+        studentEmail: student.email,
+        counselorId: currentSession.id,
+        counselorName: currentSession.name,
+        type,
+        mode: "Walk-in",
+        walkIn: true,
+        urgent: false,
+        date,
+        time,
+        notes: "",
+        status: "completed",
+        counselorNotes: "",
+        caseNotes: card.querySelector("#walkInNotes").value.trim(),
+        followUp: card.querySelector("#walkInFollowUp").checked,
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      saveAppointments([...getAppointments(), walkIn]);
+
+      addNotification(
+        student.id,
+        `Your walk-in ${type} session on ${formatDateShort(date)} was recorded by ${currentSession.name}. You can rate it in My History.${walkIn.followUp ? " Your counselor recommends a follow-up session." : ""}`,
+      );
+      window.logActivity(
+        currentSession,
+        `Logged a walk-in session for ${student.name}`,
+      );
+      refreshCurrentView();
+      return true;
     },
   });
 }
@@ -691,6 +774,11 @@ function setupAdminListeners(onLogout) {
     const caseLink = e.target.closest(".case-link");
     if (caseLink) {
       openCaseFile(Number(caseLink.dataset.student));
+      return;
+    }
+
+    if (e.target.closest("#logWalkInBtn")) {
+      openWalkInModal();
       return;
     }
 

@@ -38,8 +38,8 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
                 </div>
                 <div class="glass-card">
                     <div class="icon-box"><i class="material-icons">lock</i></div>
-                    <h3>Encrypted</h3>
-                    <p>Your records are protected with industry-standard security.</p>
+                    <h3>Kept confidential</h3>
+                    <p>Your counselor's case notes stay with the guidance office.</p>
                 </div>
             </section>
 

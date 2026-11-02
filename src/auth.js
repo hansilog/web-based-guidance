@@ -107,6 +107,17 @@ export function renderLoginPage(
                   : ""
               }
 
+              ${
+                isRegistering
+                  ? `
+                <label class="consent-check">
+                    <input type="checkbox" id="regConsent">
+                    <span>I agree that Granby Gateway may collect my name, email, course, and appointment details to schedule and provide guidance services, under the Data Privacy Act of 2012 (RA 10173). Guidance counselors can see my session records, and they stay confidential unless someone's safety is at risk. Session notes may be sent to Google's Gemini AI when a counselor creates a case summary.</span>
+                </label>
+              `
+                  : ""
+              }
+
               <button id="authBtn" class="primary-btn">${authBtnText}</button>
             </div>
 
@@ -235,6 +246,9 @@ export function renderLoginPage(
           document.getElementById("confirmPassword").value
         ) {
           return showError("Passwords do not match.");
+        }
+        if (!document.getElementById("regConsent").checked) {
+          return showError("Please agree to the data privacy notice to register.");
         }
 
         onRegister(

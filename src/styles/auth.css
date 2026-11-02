@@ -256,3 +256,39 @@
   color: #64748b;
   height: 100%; /* Keeps it centered vertically */
 }
+
+/* Data privacy consent on the register form */
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 14px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: left;
+  color: #475569;
+  cursor: pointer;
+}
+.consent-check input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+.consent-check {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Room around the card when the register form is taller than the screen */
+.auth-container {
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+/* Edge adds its own eye icon next to our show-password button */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}

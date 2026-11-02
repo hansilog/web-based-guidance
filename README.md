@@ -14,6 +14,7 @@ our title is web based guidance management and scheduling system.
 **Guidance counselors**
 - Overview: pending, urgent, today's and needs-closing counts that filter the queue when clicked
 - Today's schedule and a follow-up tracker with one-click reminders to students
+- Log walk-in sessions for students who came in without booking, saved to their case file
 - Appointment queue with status filter; approve (with time change) or reject with a reason
 - Close sessions as Completed (private case notes, follow-up recommendation) or No-show
 - Student case file with full timeline and AI case summary
@@ -26,7 +27,7 @@ our title is web based guidance management and scheduling system.
 - Reports: request types, statuses, year level, course, satisfaction ratings; CSV export and printable report
 - Global announcements, full activity log
 
-**Security basics** — hashed passwords, session re-checked against the user list on every load,
+**Security basics** — data privacy consent at registration, hashed passwords, session re-checked against the user list on every load,
 deactivated accounts blocked, 15-minute idle logout, user input escaped before display.
 
 ## Project structure

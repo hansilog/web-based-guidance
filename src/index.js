@@ -225,6 +225,8 @@ async function handleRegister(
     section: sec,
     role: "student",
     active: true,
+    // The register form can't submit without the consent checkbox
+    consentAt: new Date().toISOString(),
   };
 
   users.push(newUser);

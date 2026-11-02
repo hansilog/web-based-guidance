@@ -1,5 +1,10 @@
 import { escapeHtml } from "./syncUtil.js";
-import { formatTime12, parseDate, appointmentStart } from "./store.js";
+import {
+  formatTime12,
+  parseDate,
+  appointmentStart,
+  COUNSELING_TYPES,
+} from "./store.js";
 
 // guidanceView.js
 // --- PURE HTML COMPONENT MODULE ---
@@ -135,6 +140,7 @@ const FILTERS = [
   ["approved", "Approved"],
   ["to-close", "Needs closing"],
   ["completed", "Completed"],
+  ["walk-in", "Walk-ins"],
   ["closed", "Rejected / Cancelled / No-show"],
 ];
 
@@ -147,6 +153,9 @@ export function generateAppointmentsTableHtml(
         <div class="table-header-main">
             <h2><i class="material-icons">event_note</i> Appointment Requests</h2>
             <div class="table-tools">
+                <button type="button" id="logWalkInBtn" class="act-btn complete">
+                    <i class="material-icons">directions_walk</i><span>Log Walk-in</span>
+                </button>
                 <select id="statusFilter" aria-label="Filter by status">
                   ${FILTERS.map(
                     ([value, label]) =>
@@ -267,6 +276,42 @@ export function renderCloseBody(app, status) {
   `;
 }
 
+// Body of the log walk-in dialog
+export function renderWalkInBody(students, date, time) {
+  return `
+    <p class="modal-hint">For students who came to the office without booking. This saves a completed session to their case file.</p>
+    <label class="modal-label" for="walkInStudent">Student</label>
+    <select id="walkInStudent" class="modal-input">
+      <option value="">Select a student...</option>
+      ${students
+        .map(
+          (s) =>
+            `<option value="${s.id}">${escapeHtml(s.name)}${s.course ? ` (${escapeHtml(s.course)}${s.section ? ` ${escapeHtml(s.section)}` : ""})` : ""}</option>`,
+        )
+        .join("")}
+    </select>
+    <label class="modal-label" for="walkInType">Reason for visit</label>
+    <select id="walkInType" class="modal-input">
+      <option value="">Select a reason...</option>
+      ${COUNSELING_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}
+    </select>
+    <div class="walkin-when">
+      <div>
+        <label class="modal-label" for="walkInDate">Date</label>
+        <input type="date" id="walkInDate" class="modal-input" value="${date}" max="${date}">
+      </div>
+      <div>
+        <label class="modal-label" for="walkInTime">Time</label>
+        <input type="time" id="walkInTime" class="modal-input" value="${time}">
+      </div>
+    </div>
+    <label class="modal-label" for="walkInNotes">Private case notes</label>
+    <textarea id="walkInNotes" class="modal-input" rows="4" placeholder="What was discussed, observations, agreed next steps..."></textarea>
+    <p class="modal-hint"><i class="material-icons">lock</i> Only guidance counselors can see case notes.</p>
+    <label class="modal-check"><input type="checkbox" id="walkInFollowUp"> Recommend a follow-up session</label>
+  `;
+}
+
 // Student case file: profile, rating, AI summary, full session timeline
 export function renderCaseFile(student, apps) {
   const rated = apps.filter((a) => a.feedback);
@@ -306,7 +351,7 @@ export function renderCaseFile(student, apps) {
             <strong>${formatDateShort(a.date)}, ${formatTime12(a.time)}</strong>
             ${statusPill(a.status)}
           </div>
-          <div class="case-entry-meta">${escapeHtml(a.type)} · ${escapeHtml(a.counselorName || "Unassigned")}</div>
+          <div class="case-entry-meta">${escapeHtml(a.type)} · ${escapeHtml(a.counselorName || "Unassigned")}${a.walkIn ? " · Walk-in" : ""}</div>
           ${a.notes ? `<div class="case-line"><span>Student:</span> ${escapeHtml(a.notes)}</div>` : ""}
           ${a.counselorNotes ? `<div class="case-line"><span>To student:</span> ${escapeHtml(a.counselorNotes)}</div>` : ""}
           ${a.caseNotes ? `<div class="case-line private"><span><i class="material-icons">lock</i> Case notes:</span> ${escapeHtml(a.caseNotes)}</div>` : ""}

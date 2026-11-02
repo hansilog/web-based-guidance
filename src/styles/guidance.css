@@ -1162,3 +1162,13 @@ td {
 .guidance-portal .cal-toolbar .cal-nav .btn-secondary {
   white-space: nowrap;
 }
+
+/* Log walk-in dialog */
+.walkin-when {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.guidance-portal #logWalkInBtn {
+  padding: 8px 12px;
+}

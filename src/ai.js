@@ -48,15 +48,14 @@ function errorStatus(error) {
  * which the free tier returns often when messages are sent close together.
  */
 async function generateWithRetry(aiClient, request, retries = 2) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await aiClient.models.generateContent({ model: MODEL, ...request });
-    } catch (error) {
-      if (attempt >= retries || !RETRYABLE.includes(errorStatus(error))) {
-        throw error;
-      }
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-    }
+  try {
+    return await aiClient.models.generateContent({ model: MODEL, ...request });
+  } catch (error) {
+    if (retries <= 0 || !RETRYABLE.includes(errorStatus(error))) throw error;
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1500);
+    });
+    return generateWithRetry(aiClient, request, retries - 1);
   }
 }
 

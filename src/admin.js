@@ -804,8 +804,6 @@ window.exportAppointmentsCsv = () => {
     "Counselor",
     "Type",
     "Status",
-    "Student Notes",
-    "Counselor Notes",
     "Rating",
     "Created",
   ];
@@ -819,12 +817,10 @@ window.exportAppointmentsCsv = () => {
       a.counselorName || "Unassigned",
       a.type,
       a.status,
-      a.notes,
-      a.counselorNotes,
       a.feedback?.rating ?? "",
       a.createdAt,
     ]);
-  // Private case notes are intentionally left out of the export
+  // Notes of any kind stay out of the export: only counselors should read them
   // Leading byte-order mark so Excel reads the file as UTF-8
   const blob = new Blob([String.fromCharCode(0xfeff), toCsv([header, ...rows])], {
     type: "text/csv;charset=utf-8",
