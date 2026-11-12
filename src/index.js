@@ -20,6 +20,14 @@ import {
   toDateStr,
 } from "./store.js";
 import { startReminderService } from "./reminders.js";
+import {
+  isRemote,
+  loadAll,
+  restoreSession,
+  remoteSignIn,
+  remoteSignUp,
+  remoteSignOut,
+} from "./remote.js";
 import "./styles/styles.css";
 import "./styles/features.css";
 
@@ -168,7 +176,8 @@ const seedAppointments = () => {
 };
 
 // --- HANDLERS ---
-function handleLogout() {
+async function handleLogout() {
+  if (isRemote) await remoteSignOut().catch(() => {});
   sessionStorage.removeItem("gh_session");
   sessionStorage.removeItem("gh_entered");
   handleSignOut();
@@ -185,6 +194,19 @@ async function handleLogin(rawIdentifier, p, showError) {
     .toLowerCase();
   if (!identifier || !p) {
     return showError("Please enter your username/email and password.");
+  }
+
+  if (isRemote) {
+    // Supabase Auth checks the password and rate-limits guesses itself
+    const { profile, error } = await remoteSignIn(identifier, p);
+    if (error) return showError(error);
+    sessionStorage.setItem("gh_session", JSON.stringify(profile));
+    await loadAll(profile);
+    window.logActivity(profile, "Logged in");
+    const root = document.getElementById("app");
+    root.onclick = null;
+    root.onchange = null;
+    return initApp();
   }
 
   const attempts = getLoginAttempts();
@@ -264,6 +286,26 @@ async function handleRegister(
     );
   }
 
+  if (isRemote) {
+    const result = await remoteSignUp({
+      name,
+      username,
+      email: cleanEmail,
+      password: p,
+      yearLevel: yl,
+      course,
+      section: sec,
+    });
+    if (result.error) return showError(result.error);
+    alert(
+      result.needsConfirmation
+        ? "Account created! Check your email and click the confirmation link, then sign in."
+        : "Account created! You can now sign in.",
+    );
+    if (showSuccess) showSuccess();
+    return null;
+  }
+
   if (isUsernameOrEmailTaken(username, cleanEmail)) {
     return showError("Username or Email already exists!");
   }
@@ -306,7 +348,8 @@ function startIdleTimer(session) {
       );
       sessionStorage.removeItem("gh_session");
       handleSignOut();
-      window.location.reload();
+      const signOut = isRemote ? remoteSignOut() : Promise.resolve();
+      signOut.catch(() => {}).finally(() => window.location.reload());
     }, IDLE_LIMIT_MS);
   };
   ["click", "keydown", "mousemove", "scroll", "touchstart"].forEach((evt) =>
@@ -375,6 +418,22 @@ function initApp() {
 }
 // System Startup Lifecycle wrapper
 const initializeSystemSequence = async () => {
+  if (isRemote) {
+    // Signed in from an earlier visit? Load what this account may see first.
+    const profile = await restoreSession().catch(() => null);
+    if (profile) {
+      sessionStorage.setItem("gh_session", JSON.stringify(profile));
+      await loadAll(profile).catch(() => {
+        alert("Can't reach the server. Some data may be missing.");
+      });
+    } else {
+      sessionStorage.removeItem("gh_session");
+    }
+    // Reminders run on the server (pg_cron), not in the browser
+    initApp();
+    return;
+  }
+
   await seedUsers();
   seedAppointments();
   await migrateData();

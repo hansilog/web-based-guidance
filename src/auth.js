@@ -1,6 +1,7 @@
 import emailjs from "@emailjs/browser";
 import { hashPassword } from "./syncUtil.js";
 import { findUserByEmail, updateUser } from "./store.js";
+import { isRemote, sendResetCode, finishReset } from "./remote.js";
 import "./styles/auth.css";
 
 // Initialize EmailJS
@@ -191,6 +192,47 @@ export function renderLoginPage(
           .getElementById("resetEmail")
           .value.trim()
           .toLowerCase();
+
+        // Supabase emails and checks the code (expiry and attempt limits included)
+        if (isRemote) {
+          if (!generatedOTP) {
+            if (!emailVal) return showError("Please enter your email.");
+            e.target.disabled = true;
+            const problem = await sendResetCode(emailVal);
+            e.target.disabled = false;
+            if (problem) return showError(problem);
+            generatedOTP = "sent";
+            document.getElementById("otpSection").classList.remove("hidden");
+            document.getElementById("resetEmail").disabled = true;
+            e.target.innerText = "Verify & Reset";
+            return showError(
+              "If that email is registered, a 6-digit code is on its way. Check your inbox and spam folder.",
+            );
+          }
+          const code = document.getElementById("otpInput").value.trim();
+          const newPass = document.getElementById("newPass").value;
+          if (!/^\d{6,10}$/.test(code)) {
+            return showError("Enter the code from the email.");
+          }
+          if (
+            newPass.length < 8 ||
+            !/[A-Za-z]/.test(newPass) ||
+            !/\d/.test(newPass)
+          ) {
+            return showError(
+              "New password must be at least 8 characters and include a letter and a number.",
+            );
+          }
+          e.target.disabled = true;
+          const problem = await finishReset(emailVal, code, newPass);
+          e.target.disabled = false;
+          if (problem) return showError(problem);
+          generatedOTP = null;
+          alert("Password updated! You can now sign in.");
+          isForgotFlow = false;
+          render();
+          return null;
+        }
 
         // An expired code or too many wrong guesses means starting over
         if (generatedOTP && Date.now() > otpExpiresAt) {

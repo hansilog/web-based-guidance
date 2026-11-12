@@ -45,6 +45,7 @@ import {
   updateUser,
   syncStudentOnAppointments,
   findUserByEmail,
+  isRemote,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
@@ -799,7 +800,7 @@ export function renderSettings(container, session) {
             </div>
             <div class="input-wrapper plain">
                 <label>Email Address</label>
-                <input type="email" id="setEmail" value="${escapeHtml(session.email)}" required>
+                <input type="email" id="setEmail" value="${escapeHtml(session.email)}" required ${isRemote ? 'readonly title="Your sign-in email. Ask the guidance office to change it."' : ""}>
             </div>
             <div class="input-group-row" style="display: flex; gap: 16px; margin-bottom: 20px;">
                  <div class="input-wrapper plain" style="flex: 1;">

@@ -4,7 +4,7 @@
   "description": "My first Template",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/store.test.mjs && node tests/schema.test.mjs && node tests/sync.test.mjs",
     "start": "webpack serve --open --config webpack.dev.js",
     "build": "webpack --config webpack.prod.js",
     "format": "prettier . --write",
@@ -25,6 +25,7 @@
   },
   "homepage": ".",
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^8.57.0",
     "css-loader": "^7.1.4",
@@ -46,6 +47,7 @@
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "2.118.0",
     "date-fns": "^4.4.0",
     "gapi-script": "^1.2.0"
   }

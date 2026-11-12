@@ -15,7 +15,8 @@ const compat = new FlatCompat({
 export default [
   // --- ADD THIS BLOCK TO IGNORE BUILT FILES ---
   {
-    ignores: ["dist/**", "node_modules/**", "webpack.*.js"],
+    // tests/ are Node scripts (npm test), not browser code
+    ignores: ["dist/**", "node_modules/**", "webpack.*.js", "tests/**"],
   },
   // ---------------------------------------------
 
@@ -28,6 +29,10 @@ export default [
       ecmaVersion: "latest",
       globals: {
         ...globals.browser,
+        // Filled in by webpack's DefinePlugin at build time
+        __GEMINI_API_KEY__: "readonly",
+        __SUPABASE_URL__: "readonly",
+        __SUPABASE_ANON_KEY__: "readonly",
       },
     },
     rules: {

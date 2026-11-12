@@ -26,6 +26,11 @@ import {
   getBroadcasts,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
+import {
+  isRemote,
+  startPasswordChange,
+  finishPasswordChange,
+} from "./remote.js";
 import { renderCounselorCalendar } from "./calendarView.js";
 
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
@@ -718,6 +723,25 @@ function attachSettingsListener() {
       // Send the OTP to the logged-in counselor's own account email
       const recipientEmail = currentSession.email;
 
+      if (isRemote) {
+        // Supabase emails a confirmation code for the signed-in account
+        requestBtn.innerText = "Sending OTP...";
+        requestBtn.disabled = true;
+        const problem = await startPasswordChange();
+        if (problem) {
+          alert(problem);
+          requestBtn.disabled = false;
+          requestBtn.innerText = "Request OTP to Change Password";
+          return null;
+        }
+        generatedOTP = "sent";
+        otpExpiresAt = Infinity;
+        alert(`OTP Sent to ${recipientEmail}`);
+        otpContainer.classList.remove("hidden");
+        requestBtn.classList.add("hidden");
+        return null;
+      }
+
       const rand = crypto.getRandomValues(new Uint32Array(1))[0];
       generatedOTP = String(100000 + (rand % 900000));
       otpExpiresAt = Date.now() + 15 * 60000;
@@ -763,6 +787,22 @@ function attachSettingsListener() {
     verifyBtn.onclick = async () => {
       if (generatedOTP && Date.now() > otpExpiresAt) {
         resetOtp("This code has expired. Please request a new one.");
+        return;
+      }
+      if (isRemote && generatedOTP) {
+        verifyBtn.disabled = true;
+        const problem = await finishPasswordChange(
+          otpInput.value.trim(),
+          newPassInput.value,
+        );
+        verifyBtn.disabled = false;
+        if (problem) {
+          alert(problem);
+          return;
+        }
+        window.logActivity(currentSession, "Changed password");
+        newPassInput.value = "";
+        resetOtp("Success! Your password has been updated.");
         return;
       }
       if (generatedOTP && otpInput.value.trim() === generatedOTP) {

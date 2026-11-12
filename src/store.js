@@ -1,8 +1,20 @@
 // store.js
 // --- SHARED DATA LAYER: storage access + scheduling rules ---
 import { hashPassword } from "./syncUtil.js";
+import {
+  isRemote,
+  remoteHas,
+  remoteRead,
+  remoteWrite,
+  lookupConcernRemote,
+} from "./remote.js";
+
+// With Supabase configured, shared collections live in remote.js's cache and
+// are synced to the database; otherwise everything stays in localStorage.
+export { isRemote };
 
 function read(key, fallback) {
+  if (remoteHas(key)) return remoteRead(key) ?? fallback;
   try {
     return JSON.parse(localStorage.getItem(key)) ?? fallback;
   } catch {
@@ -11,8 +23,15 @@ function read(key, fallback) {
 }
 
 function write(key, value) {
+  if (remoteHas(key)) {
+    remoteWrite(key, value);
+    return;
+  }
   localStorage.setItem(key, JSON.stringify(value));
 }
+
+// Whole-number ids that fit the database's bigint columns
+export const newId = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
 // --- 1. COLLECTIONS ---
 
@@ -29,7 +48,9 @@ export const saveBlocks = (blocks) => write("gh_counselor_blocks", blocks);
 export const getUserById = (id) => getUsers().find((u) => u.id === id);
 
 // True once a collection has been saved, even if it is now empty (used for seeding)
-export const hasCollection = (key) => localStorage.getItem(key) !== null;
+// (With Supabase the database is the source of truth, so nothing is seeded.)
+export const hasCollection = (key) =>
+  remoteHas(key) || localStorage.getItem(key) !== null;
 
 const lower = (value) =>
   String(value ?? "")
@@ -90,7 +111,7 @@ export const getActivityLogs = () => read("gh_activity_logs", []);
 
 export function addActivityLog(user, action) {
   const entry = {
-    id: Date.now() + Math.random(),
+    id: newId(),
     timestamp: new Date().toISOString(),
     userName: user?.name || "Unknown",
     userRole: user?.role || "unknown",
@@ -109,7 +130,7 @@ export const getBroadcasts = () => read("gh_global_broadcasts", []);
 
 export function addBroadcast(message) {
   const broadcast = {
-    id: Date.now(),
+    id: newId(),
     message,
     date: new Date().toLocaleDateString("en-US", {
       month: "short",
@@ -285,15 +306,30 @@ export function checkDate(date, counselorId = null) {
   return "";
 }
 
+// Every pending/approved booking with a counselor. Students only load their
+// own appointments from the database, so other students' taken slots come
+// from the server's nameless slot list (gh_booked_slots).
+export function getActiveBookings() {
+  const mine = getAppointments();
+  const active = mine.filter(
+    (a) => ACTIVE_STATUSES.includes(a.status) && a.counselorId && !a.walkIn,
+  );
+  if (!isRemote) return active;
+  const known = new Set(mine.map((a) => a.id));
+  return [
+    ...active,
+    ...read("gh_booked_slots", []).filter((b) => !known.has(b.id)),
+  ];
+}
+
 export function isCounselorFree(counselorId, date, time, ignoreAppId = null) {
   if (isDayOff(counselorId, date)) return false;
-  return !getAppointments().some(
+  return !getActiveBookings().some(
     (a) =>
       a.id !== ignoreAppId &&
       a.counselorId === counselorId &&
       a.date === date &&
-      a.time === time &&
-      ACTIVE_STATUSES.includes(a.status),
+      a.time === time,
   );
 }
 
@@ -315,11 +351,8 @@ export function getSlotStates(date, counselorId, ignoreAppId = null) {
 
 // Free counselor with the fewest active appointments (ties: lowest id)
 export function autoAssignCounselor(date, time) {
-  const apps = getAppointments();
-  const load = (c) =>
-    apps.filter(
-      (a) => a.counselorId === c.id && ACTIVE_STATUSES.includes(a.status),
-    ).length;
+  const bookings = getActiveBookings();
+  const load = (c) => bookings.filter((a) => a.counselorId === c.id).length;
   return (
     getCounselors()
       .filter((c) => isCounselorFree(c.id, date, time))
@@ -350,7 +383,7 @@ export function addNotification(userId, message) {
   if (userId == null) return;
   const all = read("gh_notifications", []);
   all.push({
-    id: Date.now() + Math.random(),
+    id: newId(),
     userId,
     message,
     read: false,
@@ -453,7 +486,7 @@ export function joinWaitlist({ studentId, date, time, counselorId }) {
   saveWaitlist([
     ...liveWaitlist(),
     {
-      id: Date.now() + Math.random(),
+      id: newId(),
       studentId,
       date,
       time,
@@ -502,11 +535,16 @@ export function notifyWaitlist(date, time, counselorId) {
 
 // Every slot of a day, e.g. after a counselor removes a day off
 export function notifyWaitlistForDay(date, counselorId) {
+  // The database does this itself (release_day trigger)
+  if (isRemote) return;
   getSlots().forEach((time) => notifyWaitlist(date, time, counselorId));
 }
 
 // Called by updateAppointment: an active booking that leaves its slot frees it
 function releaseSlotIfFreed(before, after) {
+  // The database does this itself (release_slot trigger), and students
+  // can't see each other's waitlist entries anyway
+  if (isRemote) return;
   if (!ACTIVE_STATUSES.includes(before.status) || !before.counselorId) return;
   const moved =
     !ACTIVE_STATUSES.includes(after.status) ||
@@ -554,7 +592,7 @@ function makeConcernRef() {
 export function addConcern(fields) {
   const stamp = new Date().toISOString();
   const concern = {
-    id: Date.now(),
+    id: newId(),
     ref: makeConcernRef(),
     status: "new",
     response: "",
@@ -585,4 +623,10 @@ export function findConcernByRef(ref) {
     .trim()
     .toUpperCase();
   return getConcerns().find((c) => c.ref === clean) || null;
+}
+
+// Status lookup for the public "Check a Report" form (anonymous with Supabase)
+export async function lookupConcern(ref) {
+  if (isRemote) return lookupConcernRemote(ref);
+  return findConcernByRef(ref);
 }

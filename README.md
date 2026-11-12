@@ -63,22 +63,36 @@ src/
 ├── ai.js            # Gemini chat assistant + case summaries
 ├── calendar.js      # Google Calendar sync
 ├── syncUtil.js      # Shared helpers: hashing, HTML escaping, cross-tab sync, announcement banner
+├── remote.js        # Supabase backend: sync cache behind store.js, live updates, sign-in
 └── styles/          # CSS per portal; styles.css + features.css hold the shared feature styles
+supabase/
+├── schema.sql       # Tables, constraints, triggers, Row Level Security, reminder job
+└── README.md        # Step-by-step Supabase setup
+tests/               # npm test: store logic, database schema + RLS, sync engine
 ```
 
-All data is stored in the browser (`localStorage` / `sessionStorage`); there is no backend.
-This means data is per-browser, and a technical user could still edit it with DevTools.
-Moving to a real backend (e.g. Firebase) is the next step for production use.
-All shared data (users, appointments, days off, notifications, waitlist, concerns, office settings,
-broadcasts, activity log, login attempts) is read and written only through `store.js`, so that is the
-one file to swap for database calls. Only per-browser state stays outside it: the login session,
-the Google Calendar token, the Gemini key and the concern-form spam guard.
-Until then, reminders and waitlist alerts only go out while the app is open in a browser;
-with a backend they should move to a scheduled server job.
+## Database
+
+The app runs in one of two modes, chosen at build time:
+
+- **localStorage (default):** no setup. Data lives in one browser, which is fine for demos
+  but anyone can edit it with DevTools.
+- **Supabase (PostgreSQL):** set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env`.
+  Data is shared and live, sign-in uses Supabase Auth, and the database enforces the
+  rules: no double-booking, booking hours/holidays/days off, students only see their own
+  records, case notes are staff-only, and reminders run on the server.
+  Setup steps: [supabase/README.md](supabase/README.md).
+
+All shared data goes through `store.js`. In Supabase mode, `remote.js` loads what the
+signed-in user may see into memory, so the screens work unchanged, and syncs every change
+to the database in the background. Only per-browser state stays in session/local storage:
+the login session, the Google Calendar token, the Gemini key and the concern-form spam guard.
 
 Check-in answers stay out of the AI case summary, the CSV export, emails and the printed slip.
 
-## Demo accounts
+## Demo accounts (localStorage mode)
+
+With Supabase, register accounts in the app and make the first admin as described in [supabase/README.md](supabase/README.md).
 
 | Role | Username | Password |
 | --- | --- | --- |
@@ -92,4 +106,5 @@ Check-in answers stay out of the AI case summary, the CSV export, emails and the
 
 - `npm start` — dev server
 - `npm run build` — production build to `dist/`
+- `npm test` — store logic, database schema + security rules (real PostgreSQL via PGlite), sync engine
 - `npm run lint` / `npm run format`

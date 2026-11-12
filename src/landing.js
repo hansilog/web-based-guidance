@@ -5,9 +5,10 @@ import {
   CONCERN_CATEGORIES,
   CONCERN_STATUSES,
   addConcern,
-  findConcernByRef,
+  lookupConcern,
   getCounselors,
   addNotification,
+  isRemote,
 } from "./store.js";
 
 // Light spam guard for the public form: a few reports per hour per browser
@@ -108,16 +109,20 @@ function openConcernForm() {
         contact: card.querySelector("#concernContact").value.trim(),
       });
       rememberReport();
-      getCounselors().forEach((c) =>
-        addNotification(
-          c.id,
-          `New anonymous concern (${category}). Open the Concerns tab to review it.`,
-        ),
-      );
-      window.logActivity(
-        { name: "Anonymous", role: "public" },
-        `Submitted anonymous concern ${concern.ref}`,
-      );
+      // With Supabase the database alerts counselors itself (and anonymous
+      // visitors can't write to notifications or the activity log)
+      if (!isRemote) {
+        getCounselors().forEach((c) =>
+          addNotification(
+            c.id,
+            `New anonymous concern (${category}). Open the Concerns tab to review it.`,
+          ),
+        );
+        window.logActivity(
+          { name: "Anonymous", role: "public" },
+          `Submitted anonymous concern ${concern.ref}`,
+        );
+      }
       showConcernReceipt(concern.ref);
       return true;
     },
@@ -134,9 +139,15 @@ function openConcernLookup() {
       <input type="text" id="concernRef" class="modal-input" placeholder="GC-XXXXXX" autocomplete="off" style="text-transform: uppercase;">
       <div id="concernResult"></div>
     `,
-    onConfirm: ({ card, showError }) => {
-      const concern = findConcernByRef(card.querySelector("#concernRef").value);
+    onConfirm: async ({ card, showError }) => {
       const box = card.querySelector("#concernResult");
+      let concern;
+      try {
+        concern = await lookupConcern(card.querySelector("#concernRef").value);
+      } catch (err) {
+        showError(err.message);
+        return false;
+      }
       if (!concern) {
         box.innerHTML = "";
         showError("No report found with that code. Check for typos.");

@@ -1,4 +1,5 @@
 import { hashPassword, escapeHtml } from "./syncUtil.js";
+import { createCounselor, sendResetEmail } from "./remote.js";
 import {
   getUsers,
   saveUsers,
@@ -17,6 +18,7 @@ import {
   parseDate,
   toDateStr,
   ACTIVE_STATUSES,
+  isRemote,
   getUserById,
   getActivityLogs,
   addBroadcast,
@@ -891,6 +893,25 @@ window.resetStudentPassword = async (id) => {
   const users = getUsers();
   const student = users.find((u) => u.id === id);
   if (!student) return;
+  if (isRemote) {
+    // With Supabase, admins never see or set passwords: the student gets a code
+    if (
+      !window.confirm(
+        `Email ${student.name} a password reset code at ${student.email}?`,
+      )
+    )
+      return;
+    const problem = await sendResetEmail(student.email);
+    if (problem) {
+      alert(problem);
+      return;
+    }
+    window.logActivity(adminSession, `Sent password reset to ${student.name}`);
+    alert(
+      `Reset code sent. ${student.name} can enter it under "Forgot Password?" on the sign-in page.`,
+    );
+    return;
+  }
   if (!window.confirm(`Reset the password for ${student.name}?`)) return;
 
   // Readable temporary password, e.g. "gg-7k2m9p"
@@ -951,6 +972,10 @@ function setupModalHandlers() {
       return;
     }
 
+    if (isRemote && !id) {
+      await addCounselorRemote({ name, email, password, specialty });
+      return;
+    }
     if (id) {
       const index = users.findIndex((u) => u.id === id);
       if (index !== -1) {
@@ -963,11 +988,14 @@ function setupModalHandlers() {
           );
         }
         users[index].name = name;
-        users[index].email = email;
-        [users[index].user] = email.split("@");
+        // The sign-in email can't be changed here once accounts live in Supabase
+        if (!isRemote) {
+          users[index].email = email;
+          [users[index].user] = email.split("@");
+        }
         users[index].specialty = specialty; // Save modified specialty parameter
 
-        if (password) {
+        if (password && !isRemote) {
           users[index].pass = await hashPassword(password);
         }
 
@@ -1004,6 +1032,31 @@ function setupModalHandlers() {
   };
 }
 
+async function addCounselorRemote({ name, email, password, specialty }) {
+  if (!password) {
+    alert("Please set a starting password for the new counselor.");
+    return;
+  }
+  const saveBtn = document.getElementById("saveCounselorBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Creating...";
+  const result = await createCounselor({ name, email, password, specialty });
+  saveBtn.disabled = false;
+  saveBtn.textContent = "Save Counselor";
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  window.logActivity(adminSession, `Added counselor ${name}`);
+  alert(
+    result.needsConfirmation
+      ? `Counselor added. ${name} must click the confirmation link sent to ${email} before signing in.`
+      : "Counselor added.",
+  );
+  document.getElementById("counselorModal").style.display = "none";
+  renderStaffManager(document.getElementById("admin-dynamic-content"));
+}
+
 window.openAddCounselorModal = () => {
   document.getElementById("modalTitle").innerHTML =
     '<i class="material-icons" style="color: #2563eb;">person_add</i> Add Counselor';
@@ -1014,6 +1067,8 @@ window.openAddCounselorModal = () => {
     "General Counseling";
   document.getElementById("counselorPasswordField").value = "";
   document.getElementById("passwordLabel").textContent = "Password";
+  document.getElementById("counselorEmailField").readOnly = false;
+  document.getElementById("counselorPasswordField").disabled = false;
 
   document.getElementById("counselorModal").style.display = "flex";
 };
@@ -1031,8 +1086,12 @@ window.openEditCounselorModal = (id) => {
   document.getElementById("counselorSpecialtyField").value =
     targetUser.specialty || "General Counseling";
   document.getElementById("counselorPasswordField").value = "";
-  document.getElementById("passwordLabel").textContent =
-    "New Password (Leave blank to keep old password)";
+  document.getElementById("passwordLabel").textContent = isRemote
+    ? 'Password (counselors change their own, or use "Forgot Password?")'
+    : "New Password (Leave blank to keep old password)";
+  document.getElementById("counselorPasswordField").disabled = isRemote;
+  // The sign-in email belongs to the counselor's Supabase account
+  document.getElementById("counselorEmailField").readOnly = isRemote;
 
   document.getElementById("counselorModal").style.display = "flex";
 };
