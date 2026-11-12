@@ -14,6 +14,10 @@ export function renderLoginPage(
   let isRegistering = startAsRegister;
   let isForgotFlow = false;
   let generatedOTP = null;
+  let otpExpiresAt = 0;
+  let otpTriesLeft = 0;
+  const OTP_TTL_MS = 10 * 60 * 1000;
+  const OTP_MAX_TRIES = 5;
 
   const render = () => {
     let subtitle = "Sign in to access your portal";
@@ -174,20 +178,36 @@ export function renderLoginPage(
     }
 
     if (e.target.id === "authBtn") {
-      const errorBanner = document.getElementById("authError");
+      // Look the banner up each time: render() may have replaced it
       const showError = (msg) => {
+        const errorBanner = document.getElementById("authError");
         errorBanner.innerText = msg;
         errorBanner.classList.remove("hidden");
       };
 
       if (isForgotFlow) {
-        const emailVal = document.getElementById("resetEmail").value.trim();
+        const emailVal = document
+          .getElementById("resetEmail")
+          .value.trim()
+          .toLowerCase();
+        const sameEmail = (u) => String(u.email).toLowerCase() === emailVal;
+
+        // An expired code or too many wrong guesses means starting over
+        if (generatedOTP && Date.now() > otpExpiresAt) {
+          generatedOTP = null;
+          render();
+          return showError("The code expired. Please request a new one.");
+        }
+
         if (!generatedOTP) {
           const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
-          if (!users.find((u) => u.email === emailVal))
-            return showError("Email not registered.");
+          if (!users.find(sameEmail)) return showError("Email not registered.");
 
-          generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+          // Cryptographically random 6-digit code
+          const rand = crypto.getRandomValues(new Uint32Array(1))[0];
+          generatedOTP = String(100000 + (rand % 900000));
+          otpExpiresAt = Date.now() + OTP_TTL_MS;
+          otpTriesLeft = OTP_MAX_TRIES;
           try {
             await emailjs.send("service_mtv9cbi", "template_gbmoria", {
               to_email: emailVal,
@@ -205,11 +225,17 @@ export function renderLoginPage(
           document.getElementById("otpInput").value.trim() === generatedOTP
         ) {
           const newPass = document.getElementById("newPass").value;
-          if (newPass.length < 3)
-            return showError("Please enter a new password.");
+          if (
+            newPass.length < 8 ||
+            !/[A-Za-z]/.test(newPass) ||
+            !/\d/.test(newPass)
+          )
+            return showError(
+              "New password must be at least 8 characters and include a letter and a number.",
+            );
 
           const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
-          const index = users.findIndex((u) => u.email === emailVal);
+          const index = users.findIndex(sameEmail);
           if (index === -1) return showError("Email not registered.");
 
           users[index].pass = await hashPassword(newPass);
@@ -219,7 +245,15 @@ export function renderLoginPage(
           isForgotFlow = false;
           render();
         } else {
-          showError("Invalid OTP");
+          otpTriesLeft -= 1;
+          if (otpTriesLeft <= 0) {
+            generatedOTP = null;
+            render();
+            return showError("Too many wrong codes. Please request a new one.");
+          }
+          showError(
+            `Invalid code. ${otpTriesLeft} attempt${otpTriesLeft === 1 ? "" : "s"} left.`,
+          );
         }
       } else if (isRegistering) {
         const first = document.getElementById("regFirst").value.trim();
@@ -248,7 +282,9 @@ export function renderLoginPage(
           return showError("Passwords do not match.");
         }
         if (!document.getElementById("regConsent").checked) {
-          return showError("Please agree to the data privacy notice to register.");
+          return showError(
+            "Please agree to the data privacy notice to register.",
+          );
         }
 
         onRegister(

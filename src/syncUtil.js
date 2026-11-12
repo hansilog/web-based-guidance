@@ -25,12 +25,11 @@ export function listenForRealTimeUpdates(renderCallback) {
       "gh_global_broadcasts",
       "gh_notifications",
       "gh_counselor_blocks",
+      "gh_waitlist",
+      "gh_concerns",
+      "gh_settings",
     ];
     if (watchedKeys.includes(e.key)) {
-      console.log(
-        " Real-time database mutation detected! Syncing UI layouts...",
-      );
-
       renderCallback();
     }
   });
@@ -48,7 +47,8 @@ window.logActivity = (user, action) => {
   };
 
   logs.push(newLog);
-  localStorage.setItem("gh_activity_logs", JSON.stringify(logs));
+  // Keep the newest 1000 entries so localStorage (~5 MB) never fills up
+  localStorage.setItem("gh_activity_logs", JSON.stringify(logs.slice(-1000)));
 };
 
 export function renderBroadcastBanner() {

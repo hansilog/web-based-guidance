@@ -1,0 +1,589 @@
+/* =========================================================
+   features.css
+   Waitlist, wellbeing check-in, anonymous concerns,
+   office hours and counselor performance.
+   Loaded after styles.css.
+   ========================================================= */
+
+/* --- Waitlist (booking form) --- */
+.waitlist-row {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.waitlist-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #475569;
+  line-height: 1.4;
+}
+.waitlist-label .material-icons {
+  font-size: 16px;
+  color: #f59e0b;
+}
+.waitlist-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.waitlist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.waitlist-btn .material-icons {
+  font-size: 16px;
+}
+.waitlist-btn:hover:not([disabled]) {
+  background: #fef3c7;
+}
+.waitlist-btn.joined {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  cursor: default;
+}
+.waitlist-btn:focus-visible,
+.concern-filter:focus-visible,
+.checkin-clear:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* --- Waitlist (dashboard card) --- */
+.waitlist-card {
+  margin-top: 20px;
+}
+.waitlist-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.waitlist-card h3 .material-icons {
+  color: #f59e0b;
+}
+.waitlist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.waitlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.waitlist-item > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.waitlist-item small {
+  color: #64748b;
+}
+.waitlist-item.open small {
+  color: #15803d;
+  font-weight: 700;
+}
+.primary-btn.small {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  gap: 6px;
+}
+.primary-btn.small .material-icons {
+  font-size: 18px;
+}
+
+/* --- Wellbeing check-in (booking form) --- */
+.checkin-box {
+  margin: 4px 0 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+.checkin-box summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: #0f172a;
+}
+.checkin-box summary::-webkit-details-marker {
+  display: none;
+}
+.checkin-box summary small {
+  font-weight: 500;
+  color: #64748b;
+}
+.checkin-box summary .material-icons {
+  font-size: 20px;
+  color: #e11d48;
+}
+.checkin-box summary .chevron {
+  margin-left: auto;
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+.checkin-box[open] summary .chevron {
+  transform: rotate(180deg);
+}
+.checkin-box > :not(summary) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+.checkin-intro {
+  margin-top: 0;
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.5;
+}
+.checkin-q {
+  margin-top: 0;
+  margin-bottom: 14px;
+  padding: 0;
+  border: 0;
+}
+.checkin-q legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+.checkin-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.checkin-option {
+  position: relative;
+}
+.checkin-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.checkin-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 0.78rem;
+  text-align: center;
+  line-height: 1.25;
+  color: #334155;
+  cursor: pointer;
+}
+.checkin-option input:checked + span {
+  border-color: var(--primary);
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+.checkin-option input:focus-visible + span {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.checkin-notice {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.checkin-notice.hidden {
+  display: none;
+}
+.checkin-notice a {
+  color: #b91c1c;
+  font-weight: 700;
+}
+.checkin-clear {
+  margin-bottom: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .checkin-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- Check-in tags & details (counselor) --- */
+.checkin-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.checkin-tag.low {
+  background: #dcfce7;
+  color: #166534;
+}
+.checkin-tag.moderate {
+  background: #fef3c7;
+  color: #92400e;
+}
+.checkin-tag.high {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.checkin-tag.safety {
+  background: #b91c1c;
+  color: #fff;
+}
+.checkin-details {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 0.85rem;
+}
+.checkin-details.safety {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.checkin-details-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.checkin-details-head .checkin-tag {
+  margin-left: 0;
+}
+.checkin-score {
+  margin-left: auto;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.checkin-alert {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0 !important;
+  color: #991b1b;
+  font-weight: 600;
+}
+.checkin-alert .material-icons {
+  font-size: 18px;
+}
+.checkin-details ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.checkin-details li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid #e2e8f0;
+}
+.checkin-details li span {
+  color: #475569;
+}
+.checkin-details li strong {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* --- Anonymous concerns --- */
+.concern-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.concern-pill.new {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.concern-pill.reviewing {
+  background: #fef3c7;
+  color: #92400e;
+}
+.concern-pill.resolved {
+  background: #dcfce7;
+  color: #166534;
+}
+.concern-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.concern-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.concern-filter {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.concern-filter.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.concern-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+.concern-card {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #ef4444;
+  border-radius: 10px;
+  background: #fff;
+}
+.concern-card.reviewing {
+  border-left-color: #f59e0b;
+}
+.concern-card.resolved {
+  border-left-color: #22c55e;
+  opacity: 0.85;
+}
+.concern-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.concern-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.concern-card-head small {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.concern-text {
+  margin: 12px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  color: #1e293b;
+}
+.concern-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+}
+.concern-meta dt {
+  color: #64748b;
+  font-weight: 600;
+}
+.concern-meta dd {
+  margin: 0;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+.concern-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.concern-ref {
+  margin: 4px 0 8px !important;
+  padding: 12px;
+  border: 2px dashed #93c5fd;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  user-select: all;
+}
+.concern-status-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.concern-status-box p {
+  margin: 0 0 8px;
+}
+
+/* Landing page banner */
+.concern-section {
+  padding: 0 8% 60px;
+}
+.concern-banner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 32px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.25);
+}
+.concern-banner .icon-box {
+  margin-bottom: 0;
+  flex-shrink: 0;
+  background: #fef2f2;
+  color: #dc2626;
+}
+.concern-copy {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.concern-copy h2 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  color: #0f172a;
+}
+.concern-copy p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+.concern-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 600px) {
+  .concern-section {
+    padding: 0 16px 40px;
+  }
+  .concern-banner {
+    padding: 22px;
+  }
+  .concern-cta,
+  .concern-cta button {
+    width: 100%;
+  }
+}
+
+/* --- Admin: counselor performance --- */
+.report-section.report-wide {
+  grid-column: 1 / -1;
+}
+.perf-table td,
+.perf-table th {
+  font-variant-numeric: tabular-nums;
+}
+.perf-sub {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.perf-rate.bad {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* --- Admin: office hours --- */
+.office-card + .office-card {
+  margin-top: 20px;
+}
+.office-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin: 16px 0 10px;
+}
+.office-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+}
+.office-grid .admin-input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+}
+.office-add {
+  display: flex;
+  align-items: flex-end;
+}
+.office-card .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.holiday-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.holiday-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.holiday-list li.past {
+  opacity: 0.55;
+}

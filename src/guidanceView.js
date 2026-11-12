@@ -4,7 +4,9 @@ import {
   parseDate,
   appointmentStart,
   COUNSELING_TYPES,
+  CONCERN_STATUSES,
 } from "./store.js";
+import { checkInTag, checkInDetailsHtml } from "./checkin.js";
 
 // guidanceView.js
 // --- PURE HTML COMPONENT MODULE ---
@@ -132,6 +134,8 @@ export function renderOverview({ stats, filter, today, followUps }) {
   `;
 }
 
+const ACTIVE = ["pending", "approved"];
+
 const FILTERS = [
   ["all", "All"],
   ["pending", "Pending"],
@@ -192,6 +196,7 @@ export function generateAppointmentsTableHtml(
                             <td data-label="Category">
                                 <span class="type-tag">${escapeHtml(app.type)}</span>
                                 ${app.urgent && app.status === "pending" ? '<span class="urgent-tag">Urgent</span>' : ""}
+                                ${ACTIVE.includes(app.status) ? checkInTag(app.checkIn) : ""}
                                 ${app.mode ? `<div class="row-sub">${escapeHtml(app.mode)}</div>` : ""}
                                 ${app.notes ? `<div class="row-sub" title="${escapeHtml(app.notes)}">“${escapeHtml(app.notes.length > 60 ? `${app.notes.slice(0, 57)}...` : app.notes)}”</div>` : ""}
                             </td>
@@ -230,6 +235,7 @@ export function renderDecisionBody(app, status, slotOptions) {
     <p class="modal-lead"><strong>${escapeHtml(app.studentName)}</strong> · ${escapeHtml(app.type)}${app.mode ? ` · ${escapeHtml(app.mode)}` : ""}${app.urgent ? ' <span class="urgent-tag">Urgent</span>' : ""}<br>
     ${formatDateShort(app.date)}, ${formatTime12(app.time)}</p>
     ${app.notes ? `<p class="modal-quote">“${escapeHtml(app.notes)}”</p>` : ""}
+    ${checkInDetailsHtml(app.checkIn)}
     ${
       isApprove
         ? `
@@ -353,6 +359,7 @@ export function renderCaseFile(student, apps) {
           </div>
           <div class="case-entry-meta">${escapeHtml(a.type)} · ${escapeHtml(a.counselorName || "Unassigned")}${a.walkIn ? " · Walk-in" : ""}</div>
           ${a.notes ? `<div class="case-line"><span>Student:</span> ${escapeHtml(a.notes)}</div>` : ""}
+          ${checkInDetailsHtml(a.checkIn)}
           ${a.counselorNotes ? `<div class="case-line"><span>To student:</span> ${escapeHtml(a.counselorNotes)}</div>` : ""}
           ${a.caseNotes ? `<div class="case-line private"><span><i class="material-icons">lock</i> Case notes:</span> ${escapeHtml(a.caseNotes)}</div>` : ""}
           ${a.followUp ? `<div class="case-line accent">Follow-up recommended</div>` : ""}
@@ -509,6 +516,96 @@ export function renderLogs(activities = []) {
                 : '<p class="empty-msg">No recent activity found.</p>'
             }
         </div>
+    </div>
+  `;
+}
+
+// --- ANONYMOUS CONCERNS ---
+
+function concernStatusPill(status) {
+  return `<span class="concern-pill ${escapeHtml(status)}">${CONCERN_STATUSES[status] || escapeHtml(status)}</span>`;
+}
+
+export function renderConcerns(concerns = [], filter = "open") {
+  const counts = {
+    new: concerns.filter((c) => c.status === "new").length,
+    reviewing: concerns.filter((c) => c.status === "reviewing").length,
+    resolved: concerns.filter((c) => c.status === "resolved").length,
+  };
+  const shown = concerns
+    .filter((c) => {
+      if (filter === "open") return c.status !== "resolved";
+      if (filter === "all") return true;
+      return c.status === filter;
+    })
+    // Newest unresolved first
+    .sort(
+      (a, b) =>
+        (a.status === "resolved") - (b.status === "resolved") ||
+        new Date(b.createdAt) - new Date(a.createdAt),
+    );
+
+  const filterBtn = (key, label) =>
+    `<button type="button" class="concern-filter ${filter === key ? "active" : ""}" data-concern-filter="${key}" aria-pressed="${filter === key}">${label}</button>`;
+
+  return `
+    <div class="admin-card">
+      <div class="card-header concern-header">
+        <div>
+          <h2><i class="material-icons">shield</i> Anonymous Concerns</h2>
+          <p class="subtitle">Reports sent from the landing page without signing in. Reporters check for your reply with their reference code.</p>
+        </div>
+        <div class="concern-filters">
+          ${filterBtn("open", `Open (${counts.new + counts.reviewing})`)}
+          ${filterBtn("new", `New (${counts.new})`)}
+          ${filterBtn("resolved", `Resolved (${counts.resolved})`)}
+          ${filterBtn("all", "All")}
+        </div>
+      </div>
+
+      ${
+        shown.length
+          ? `<div class="concern-list">${shown
+              .map(
+                (c) => `
+        <article class="concern-card ${escapeHtml(c.status)}">
+          <header class="concern-card-head">
+            <div>
+              <strong>${escapeHtml(c.category)}</strong>
+              <small>${escapeHtml(c.ref)} · ${new Date(c.createdAt).toLocaleString()}</small>
+            </div>
+            ${concernStatusPill(c.status)}
+          </header>
+          <p class="concern-text">${escapeHtml(c.description)}</p>
+          <dl class="concern-meta">
+            ${c.location ? `<div><dt>Where</dt><dd>${escapeHtml(c.location)}</dd></div>` : ""}
+            ${c.when ? `<div><dt>When</dt><dd>${escapeHtml(c.when)}</dd></div>` : ""}
+            <div><dt>Contact</dt><dd>${c.contact ? escapeHtml(c.contact) : "Anonymous (no contact given)"}</dd></div>
+            ${c.handledBy ? `<div><dt>Handled by</dt><dd>${escapeHtml(c.handledBy)}</dd></div>` : ""}
+          </dl>
+          <div class="concern-form">
+            <label class="modal-label" for="concernStatus-${c.id}">Status</label>
+            <select id="concernStatus-${c.id}" class="modal-input concern-status">
+              ${Object.entries(CONCERN_STATUSES)
+                .map(
+                  ([key, label]) =>
+                    `<option value="${key}" ${c.status === key ? "selected" : ""}>${label}</option>`,
+                )
+                .join("")}
+            </select>
+            <label class="modal-label" for="concernResponse-${c.id}">Reply to the reporter (they see this with their code)</label>
+            <textarea id="concernResponse-${c.id}" class="modal-input concern-response" rows="2" placeholder="e.g. Thank you. We are looking into this and have spoken with the class adviser.">${escapeHtml(c.response || "")}</textarea>
+            <label class="modal-label" for="concernNotes-${c.id}">Internal notes (counselors only)</label>
+            <textarea id="concernNotes-${c.id}" class="modal-input concern-notes" rows="2">${escapeHtml(c.internalNotes || "")}</textarea>
+            <div class="concern-actions">
+              <button type="button" class="act-btn complete concern-save" data-id="${c.id}"><i class="material-icons">save</i><span>Save</span></button>
+            </div>
+          </div>
+        </article>`,
+              )
+              .join("")}</div>`
+          : `<p class="empty-msg">No concerns in this view.</p>`
+      }
     </div>
   `;
 }

@@ -34,8 +34,16 @@ import {
   ACTIVE_STATUSES,
   COUNSELING_TYPES,
   SESSION_MODES,
+  getHoliday,
+  officeHoursText,
+  getMyWaitlist,
+  joinWaitlist,
+  leaveWaitlist,
+  isOnWaitlist,
+  clearWaitlistForDay,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
+import { checkInFormHtml, readCheckIn } from "./checkin.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -179,7 +187,7 @@ function slipHtml(session, app) {
       ${rows.map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`).join("")}
     </table>
     <p class="ref">Reference No.: GG-${app.id}</p>
-    <p class="note">Please arrive on time and present this slip at the guidance office. Office hours: Mon-Fri, 8AM - 5PM (lunch 12-1PM).</p>
+    <p class="note">Please arrive on time and present this slip at the guidance office. Office hours: ${escapeHtml(officeHoursText())}.</p>
   </div>
 </body>
 </html>`;
@@ -209,7 +217,33 @@ function parseCounselorValue(value) {
   return value ? Number(value) : null;
 }
 
-function slotPickerHtml(date, counselorKey, selected = "", ignoreAppId = null) {
+// Taken (not past) times a student can wait for
+function waitlistHtml(slots, date, counselorKey, studentId) {
+  const taken = slots.filter((s) => s.reason === "Booked");
+  if (!studentId || taken.length === 0) return "";
+  return `
+    <div class="waitlist-row">
+      <span class="waitlist-label"><i class="material-icons">hourglass_empty</i> Want a taken time? Join its waitlist and we'll notify you if it opens:</span>
+      <div class="waitlist-times">
+        ${taken
+          .map((s) => {
+            const joined = isOnWaitlist(studentId, date, s.time, counselorKey);
+            return `<button type="button" class="waitlist-btn ${joined ? "joined" : ""}" data-time="${s.time}" ${joined ? "disabled" : ""}>
+              <i class="material-icons">${joined ? "check" : "add"}</i>${formatTime12(s.time)}${joined ? " · waiting" : ""}
+            </button>`;
+          })
+          .join("")}
+      </div>
+    </div>`;
+}
+
+function slotPickerHtml(
+  date,
+  counselorKey,
+  selected = "",
+  ignoreAppId = null,
+  waitlistFor = null,
+) {
   if (!counselorKey) {
     return `<p class="slot-hint">Choose a counselor to see open times.</p>`;
   }
@@ -219,8 +253,9 @@ function slotPickerHtml(date, counselorKey, selected = "", ignoreAppId = null) {
   if (reason) return `<p class="slot-hint warn">${escapeHtml(reason)}</p>`;
 
   const slots = getSlotStates(date, counselorKey, ignoreAppId);
+  const waitlist = waitlistHtml(slots, date, counselorKey, waitlistFor);
   if (!slots.some((s) => s.free)) {
-    return `<p class="slot-hint warn">No open times on this day. Please try another date.</p>`;
+    return `<p class="slot-hint warn">No open times on this day. Please try another date.</p>${waitlist}`;
   }
   return `
     <div class="slot-grid">
@@ -234,7 +269,8 @@ function slotPickerHtml(date, counselorKey, selected = "", ignoreAppId = null) {
         </button>`,
         )
         .join("")}
-    </div>`;
+    </div>
+    ${waitlist}`;
 }
 
 // Clicking a slot marks it selected and stores its time in the hidden input
@@ -278,10 +314,12 @@ function calendarInnerHtml(myApps, { pickable = false, selected = "" } = {}) {
     const dateStr = toDateStr(day);
     const onDay = (status) =>
       myApps.some((app) => app.date === dateStr && app.status === status);
+    const holiday = getHoliday(dateStr);
     const closed =
       pickable &&
       (day.getDay() === 0 ||
         day.getDay() === 6 ||
+        Boolean(holiday) ||
         dateStr < min ||
         dateStr > max);
 
@@ -299,7 +337,7 @@ function calendarInnerHtml(myApps, { pickable = false, selected = "" } = {}) {
         pickable && !closed
           ? `data-date="${dateStr}" role="button" tabindex="0" title="Pick ${format(day, "MMM d")}"`
           : ""
-      }>${d}</div>`,
+      } ${holiday ? `title="Office closed: ${escapeHtml(holiday.name)}"` : ""}>${d}</div>`,
     );
   }
 
@@ -329,7 +367,10 @@ function calendarInnerHtml(myApps, { pickable = false, selected = "" } = {}) {
   `;
 }
 
-export function renderRightSidebar(myApps, { pickable = false } = {}) {
+export function renderRightSidebar(
+  myApps,
+  { pickable = false, selected = "" } = {},
+) {
   // The single next approved appointment
   const nextApp = myApps
     .filter((a) => a.status === "approved" && isUpcoming(a))
@@ -362,7 +403,7 @@ export function renderRightSidebar(myApps, { pickable = false } = {}) {
             ${
               pickable
                 ? `<div class="calendar-card" id="bookingCalendar">
-                ${calendarInnerHtml(myApps, { pickable })}
+                ${calendarInnerHtml(myApps, { pickable, selected })}
             </div>`
                 : `<details class="calendar-card calendar-toggle">
                 <summary><i class="material-icons">calendar_month</i>My Calendar<i class="material-icons chevron">expand_more</i></summary>
@@ -372,7 +413,7 @@ export function renderRightSidebar(myApps, { pickable = false } = {}) {
 
             <div class="support-card">
                 <h4>Support</h4>
-                <p style="font-size: 0.85rem;">Office hours: Mon–Fri, 8AM – 5PM (lunch 12–1PM).</p>
+                <p style="font-size: 0.85rem;">Office hours: ${escapeHtml(officeHoursText())}.</p>
             </div>
         </aside>
     `;
@@ -466,11 +507,50 @@ export function renderDashboard(session = {}) {
                         </table>
                     </div>
                 </div>
+
+                ${renderWaitlistCard(session)}
             </div>
 
             ${renderRightSidebar(myApps)}
         </div>
     `;
+}
+
+// Times the student is waiting for; "Book now" appears once one opens up
+function renderWaitlistCard(session) {
+  const entries = getMyWaitlist(session.id);
+  if (entries.length === 0) return "";
+  const counselorName = (id) =>
+    id === "auto"
+      ? "Any available counselor"
+      : getCounselors().find((c) => c.id === id)?.name || "Counselor";
+
+  return `
+    <div class="table-card waitlist-card">
+      <h3><i class="material-icons">hourglass_empty</i> My Waitlist</h3>
+      <ul class="waitlist-list">
+        ${entries
+          .map((w) => {
+            const open =
+              getSlotStates(w.date, w.counselorId).find(
+                (s) => s.time === w.time,
+              )?.free ?? false;
+            return `
+          <li class="waitlist-item ${open ? "open" : ""}">
+            <div>
+              <strong>${formatDate(w.date)}, ${formatTime12(w.time)}</strong>
+              <small>${escapeHtml(counselorName(w.counselorId))} · ${open ? "This time is open now!" : "Waiting for a cancellation"}</small>
+            </div>
+            <div class="row-actions">
+              ${open ? `<button type="button" class="primary-btn small waitlist-book" data-id="${w.id}"><i class="material-icons">event_available</i> Book now</button>` : ""}
+              <button type="button" class="row-action danger waitlist-leave" data-id="${w.id}" title="Leave waitlist" aria-label="Leave waitlist"><i class="material-icons">close</i></button>
+            </div>
+          </li>`;
+          })
+          .join("")}
+      </ul>
+    </div>
+  `;
 }
 
 export function renderBookingForm(session = {}) {
@@ -490,7 +570,26 @@ export function renderBookingForm(session = {}) {
     ),
   ].join("");
 
+  // "Book now" from the waitlist carries a date and time
+  const prefillDate = prefill.date || "";
+  const prefillTime =
+    prefillDate &&
+    getSlotStates(prefillDate, prefill.counselorId).find(
+      (s) => s.time === prefill.time && s.free,
+    )
+      ? prefill.time
+      : "";
   calendarMonthOffset = 0;
+  if (prefillDate) {
+    const picked = parseDate(prefillDate);
+    const now = new Date();
+    calendarMonthOffset = Math.max(
+      0,
+      (picked.getFullYear() - now.getFullYear()) * 12 +
+        picked.getMonth() -
+        now.getMonth(),
+    );
+  }
 
   const typeOptions = [
     `<option value="">Select a reason...</option>`,
@@ -510,8 +609,8 @@ export function renderBookingForm(session = {}) {
         <div class="dashboard-main-col">
             <div class="dashboard-hero" style="padding-top: 40px;">
                 <span class="badge">Scheduling</span>
-                <h1>${prefill.counselorId ? "Book a Follow-up" : "Book an Appointment"}</h1>
-                <p>Sessions are one hour, Monday to Friday. Pick a counselor, a date, and an open time.</p>
+                <h1>${prefill.followUp ? "Book a Follow-up" : "Book an Appointment"}</h1>
+                <p>Sessions are one hour (${escapeHtml(officeHoursText())}). Pick a counselor, a date, and an open time.</p>
             </div>
 
             <div class="table-card booking-container">
@@ -548,20 +647,22 @@ export function renderBookingForm(session = {}) {
                     <div class="form-row">
                         <div class="form-group">
                             <label for="appDate">Preferred Date</label>
-                            <input type="date" id="appDate" class="date-field empty" min="${min}" max="${max}">
+                            <input type="date" id="appDate" class="date-field ${prefillDate ? "" : "empty"}" min="${min}" max="${max}" value="${prefillDate}">
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label>Available Times</label>
-                        <input type="hidden" id="appTime">
-                        <div id="slotPicker">${slotPickerHtml("", parseCounselorValue(String(prefill.counselorId || "")))}</div>
+                        <input type="hidden" id="appTime" value="${prefillTime}">
+                        <div id="slotPicker">${slotPickerHtml(prefillDate, parseCounselorValue(String(prefill.counselorId || "")), prefillTime, null, session.id)}</div>
                     </div>
 
                     <div class="form-group">
                         <label for="appNotes" id="appNotesLabel">Additional Notes (Optional)</label>
                         <textarea id="appNotes" rows="4" placeholder="Briefly describe your concern..."></textarea>
                     </div>
+
+                    ${checkInFormHtml()}
 
                     <label class="urgent-toggle">
                         <input type="checkbox" id="appUrgent">
@@ -591,7 +692,7 @@ export function renderBookingForm(session = {}) {
             </div>
         </div>
 
-        ${renderRightSidebar(myApps, { pickable: true })}
+        ${renderRightSidebar(myApps, { pickable: true, selected: prefillDate })}
     </div>
   `;
 }
@@ -837,6 +938,8 @@ function attachBookingListener(session) {
       dateInput.value,
       parseCounselorValue(counselorSelect.value),
       keep,
+      null,
+      session.id,
     );
     slotBox.innerHTML = html;
     // Drop the chosen time if it is no longer offered
@@ -861,7 +964,7 @@ function attachBookingListener(session) {
       "has-error",
       Boolean(
         dateInput.value &&
-          checkDate(dateInput.value, parseCounselorValue(counselorSelect.value)),
+        checkDate(dateInput.value, parseCounselorValue(counselorSelect.value)),
       ),
     );
   };
@@ -914,11 +1017,56 @@ function attachBookingListener(session) {
   typeSelect.onchange = updateNotesLabel;
 
   const urgentInput = document.getElementById("appUrgent");
+  const urgentHelp = document.getElementById("urgentHelp");
   urgentInput.onchange = () => {
-    document
-      .getElementById("urgentHelp")
-      .classList.toggle("hidden", !urgentInput.checked);
+    urgentHelp.classList.toggle("hidden", !urgentInput.checked);
   };
+
+  // Check-in: a worrying answer marks the request urgent and shows crisis lines
+  const checkinBox = document.getElementById("checkinBox");
+  const checkinNotice = document.getElementById("checkinNotice");
+  const updateCheckInNotice = () => {
+    const result = readCheckIn(form);
+    if (!result || result.error || !result.flagged) {
+      checkinNotice.classList.add("hidden");
+      return;
+    }
+    checkinNotice.innerHTML = result.safetyFlag
+      ? `<strong>Thank you for telling us.</strong> We've marked your request urgent so a counselor sees it first. If you might act on these thoughts, please don't wait: call <a href="tel:1553">1553</a> (NCMH Crisis Hotline) or <a href="tel:911">911</a>, or go to the guidance office now.`
+      : `<strong>Thank you for sharing.</strong> It sounds like a lot right now. We've marked your request urgent so a counselor sees it first.`;
+    checkinNotice.classList.remove("hidden");
+    urgentInput.checked = true;
+    urgentHelp.classList.remove("hidden");
+  };
+  if (checkinBox) {
+    checkinBox.onchange = updateCheckInNotice;
+    document.getElementById("checkinClear").onclick = () => {
+      checkinBox.querySelectorAll("input[type=radio]").forEach((r) => {
+        r.checked = false;
+      });
+      checkinNotice.classList.add("hidden");
+    };
+  }
+
+  // Join the waitlist for a taken time
+  slotBox.addEventListener("click", (e) => {
+    const btn = e.target.closest(".waitlist-btn:not([disabled])");
+    if (!btn) return;
+    const counselorKey = parseCounselorValue(counselorSelect.value);
+    const joined = joinWaitlist({
+      studentId: session.id,
+      date: dateInput.value,
+      time: btn.dataset.time,
+      counselorId: counselorKey,
+    });
+    if (joined) {
+      window.logActivity(
+        session,
+        `Joined waitlist for ${dateInput.value} ${formatTime12(btn.dataset.time)}`,
+      );
+    }
+    refreshSlots();
+  });
 
   refreshBookingSlots = () => {
     refreshSlots();
@@ -972,6 +1120,12 @@ function attachBookingListener(session) {
       );
     }
 
+    const checkIn = readCheckIn(form);
+    if (checkIn?.error) {
+      checkinBox.open = true;
+      return showError(checkIn.error);
+    }
+
     // Re-check the slot: another student may have taken it a moment ago
     let counselor = null;
     if (counselorKey === "auto") {
@@ -993,12 +1147,14 @@ function attachBookingListener(session) {
       counselorName: counselor.name,
       type,
       mode: document.getElementById("appMode").value,
-      urgent: urgentInput.checked,
+      urgent: urgentInput.checked || Boolean(checkIn?.flagged),
       date,
       time,
       notes,
       status: "pending",
       counselorNotes: "",
+      checkIn: checkIn || null,
+      reminders: {},
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1008,7 +1164,9 @@ function attachBookingListener(session) {
     submitBtn.disabled = true;
 
     saveAppointments([...getAppointments(), newApp]);
-    const urgentTag = newApp.urgent ? "URGENT: " : "";
+    clearWaitlistForDay(session.id, date);
+    let urgentTag = newApp.urgent ? "URGENT: " : "";
+    if (checkIn?.safetyFlag) urgentTag = "URGENT (safety flag): ";
     notifyCounselors(
       newApp,
       `${urgentTag}New ${newApp.type} request (${newApp.mode}) from ${session.name} for ${formatDate(date)}, ${formatTime12(time)}.`,
@@ -1167,6 +1325,7 @@ function openRescheduleDialog(session, app) {
         rescheduleReason: reason,
         counselorNotes: "",
       });
+      clearWaitlistForDay(session.id, date);
 
       notifyCounselors(
         updated,
@@ -1253,6 +1412,26 @@ export function attachAppointmentActions(session) {
 
   // Assign (not add) so re-rendering never stacks duplicate handlers
   container.onclick = (e) => {
+    const waitBtn = e.target.closest(".waitlist-leave, .waitlist-book");
+    if (waitBtn) {
+      const entry = getMyWaitlist(session.id).find(
+        (w) => w.id === Number(waitBtn.dataset.id),
+      );
+      if (!entry) return;
+      if (waitBtn.classList.contains("waitlist-book")) {
+        bookingPrefill = {
+          counselorId: entry.counselorId,
+          date: entry.date,
+          time: entry.time,
+        };
+        goTo("book");
+      } else {
+        leaveWaitlist(entry.id);
+        rerenderCurrentView(session);
+      }
+      return;
+    }
+
     const btn = e.target.closest(
       ".cancel-btn-table, .reschedule-btn, .rate-btn, .followup-btn, .slip-btn",
     );
@@ -1272,6 +1451,7 @@ export function attachAppointmentActions(session) {
         counselorId: app.counselorId || "auto",
         type: app.type,
         mode: app.mode,
+        followUp: true,
       };
       goTo("book");
     }

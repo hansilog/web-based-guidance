@@ -9,6 +9,14 @@ import {
   addNotification,
   formatTime12,
   toCsv,
+  getSettings,
+  saveSettings,
+  getSlots,
+  officeHoursText,
+  appointmentStart,
+  parseDate,
+  toDateStr,
+  ACTIVE_STATUSES,
 } from "./store.js";
 
 // The logged-in admin, used for activity logging
@@ -208,6 +216,11 @@ export function renderReports(stats) {
                 </div>
             </div>
             
+            <div class="report-section report-wide">
+                <h3><i class="material-icons">groups</i> Counselor Performance</h3>
+                ${renderPerformanceTable(stats.performance)}
+            </div>
+
             <div class="report-section">
                 <h3><i class="material-icons">trending_up</i> Demand Pulse (Daily Avg)</h3>
                 <div class="trend-highlight" style="padding: 20px; text-align: center; background: #f8fafc; border-radius: 8px;">
@@ -217,6 +230,97 @@ export function renderReports(stats) {
             </div>
         </div>
     </div>
+  `;
+}
+
+// Per-counselor numbers: workload, attendance, ratings and how fast requests get answered
+function getCounselorPerformance(apps, users) {
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 86400000);
+  return users
+    .filter((u) => u.role === "guidance")
+    .map((c) => {
+      const mine = apps.filter((a) => a.counselorId === c.id);
+      const completed = mine.filter((a) => a.status === "completed");
+      const noShows = mine.filter((a) => a.status === "no-show").length;
+      const booked = completed.filter((a) => !a.walkIn).length;
+      const rated = mine.filter((a) => a.feedback?.rating);
+      const decided = mine.filter((a) => a.decidedAt && a.createdAt);
+      const avgHours = decided.length
+        ? decided.reduce(
+            (sum, a) => sum + (new Date(a.decidedAt) - new Date(a.createdAt)),
+            0,
+          ) /
+          decided.length /
+          3600000
+        : null;
+      return {
+        name: c.name,
+        completed: completed.length,
+        walkIns: completed.length - booked,
+        lastWeek: completed.filter((a) => {
+          const start = appointmentStart(a);
+          return start >= weekAgo && start <= now;
+        }).length,
+        active: mine.filter((a) => ACTIVE_STATUSES.includes(a.status)).length,
+        // Walk-ins can't be no-shows, so leave them out of the rate
+        noShowRate:
+          booked + noShows
+            ? Math.round((noShows / (booked + noShows)) * 100)
+            : null,
+        avgRating: rated.length
+          ? (
+              rated.reduce((s, a) => s + a.feedback.rating, 0) / rated.length
+            ).toFixed(1)
+          : null,
+        ratingCount: rated.length,
+        avgResponse: avgHours,
+      };
+    });
+}
+
+function formatHours(hours) {
+  if (hours == null) return "—";
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
+  if (hours < 48) return `${hours.toFixed(1)} h`;
+  return `${(hours / 24).toFixed(1)} days`;
+}
+
+function renderPerformanceTable(rows = []) {
+  if (rows.length === 0) return '<p class="empty-msg">No counselors yet.</p>';
+  return `
+    <div class="table-container">
+      <table class="admin-table perf-table">
+        <thead>
+          <tr>
+            <th>Counselor</th>
+            <th title="Completed sessions, including walk-ins">Completed</th>
+            <th title="Completed in the last 7 days">Last 7 days</th>
+            <th title="Pending + approved right now">Active now</th>
+            <th title="No-shows out of booked sessions that were closed">No-show rate</th>
+            <th>Avg. rating</th>
+            <th title="Average time from request to approve/reject">Avg. response</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows
+            .map(
+              (r) => `
+            <tr>
+              <td data-label="Counselor"><strong>${escapeHtml(r.name)}</strong></td>
+              <td data-label="Completed">${r.completed}${r.walkIns ? ` <small class="perf-sub">(${r.walkIns} walk-in)</small>` : ""}</td>
+              <td data-label="Last 7 days">${r.lastWeek}</td>
+              <td data-label="Active now">${r.active}</td>
+              <td data-label="No-show rate"><span class="perf-rate ${r.noShowRate >= 25 ? "bad" : ""}">${r.noShowRate == null ? "—" : `${r.noShowRate}%`}</span></td>
+              <td data-label="Avg. rating">${r.avgRating ? `★ ${r.avgRating} <small class="perf-sub">(${r.ratingCount})</small>` : "—"}</td>
+              <td data-label="Avg. response">${formatHours(r.avgResponse)}</td>
+            </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+    <p class="modal-hint">Response time counts requests decided since this report was added.</p>
   `;
 }
 
@@ -272,6 +376,17 @@ window.printReport = (type, stats = null) => {
       <tr><td>Pending</td><td>${stats.statusBreakdown.pending}</td><td>${((stats.statusBreakdown.pending / total) * 100).toFixed(1)}%</td></tr>
       <tr><td>Rejected</td><td>${stats.statusBreakdown.rejected}</td><td>${((stats.statusBreakdown.rejected / total) * 100).toFixed(1)}%</td></tr>
     </table>
+
+    <h3>Counselor Performance</h3>
+    <table>
+      <tr><th>Counselor</th><th>Completed</th><th>Last 7 days</th><th>Active now</th><th>No-show rate</th><th>Avg. rating</th><th>Avg. response</th></tr>
+      ${stats.performance
+        .map(
+          (r) =>
+            `<tr><td>${escapeHtml(r.name)}</td><td>${r.completed}</td><td>${r.lastWeek}</td><td>${r.active}</td><td>${r.noShowRate == null ? "—" : `${r.noShowRate}%`}</td><td>${r.avgRating ?? "—"}</td><td>${formatHours(r.avgResponse)}</td></tr>`,
+        )
+        .join("")}
+    </table>
   `;
 
   const win = window.open("", "PRINT", "height=700,width=900");
@@ -301,6 +416,9 @@ export function renderAdminView(root, session, onLogout) {
                 </button>
                 <button class="nav-item" data-target="announcements">
                     <i class="material-icons">campaign</i> Global Broadcast
+                </button>
+                <button class="nav-item" data-target="office">
+                    <i class="material-icons">schedule</i> Office Hours
                 </button>
                 <button class="nav-item" data-target="logs">
                         <i class="material-icons">history</i> 
@@ -389,6 +507,8 @@ function renderSection(target, container) {
     renderLogsView(container);
   } else if (target === "students") {
     renderStudentViewer(container);
+  } else if (target === "office") {
+    renderOfficeSettings(container);
   } else if (target === "announcements") {
     container.innerHTML = `
         <div class="admin-card">
@@ -440,6 +560,185 @@ function renderSection(target, container) {
     // Now this clean fallback block links perfectly
     container.innerHTML = `<div class="admin-card"><h2>Module coming soon...</h2></div>`;
   }
+}
+
+// --- OFFICE HOURS & HOLIDAYS ---
+
+const hourName = (h) => `${h % 12 || 12}:00 ${h >= 12 ? "PM" : "AM"}`;
+
+function hourOptions(from, to, selected) {
+  const options = [];
+  for (let h = from; h <= to; h++) {
+    options.push(
+      `<option value="${h}" ${h === selected ? "selected" : ""}>${hourName(h)}</option>`,
+    );
+  }
+  return options.join("");
+}
+
+// Active bookings that the given settings would no longer allow
+function bookingsOutside(settings) {
+  const slots = getSlots(settings);
+  const closed = new Set(settings.holidays.map((h) => h.date));
+  const now = new Date();
+  return getAppointments().filter(
+    (a) =>
+      ACTIVE_STATUSES.includes(a.status) &&
+      appointmentStart(a) > now &&
+      (!slots.includes(a.time) || closed.has(a.date)),
+  );
+}
+
+function renderOfficeSettings(container) {
+  const settings = getSettings();
+  const today = toDateStr(new Date());
+  const holidays = [...settings.holidays].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+
+  container.innerHTML = `
+    <div class="admin-card office-card">
+      <h2><i class="material-icons">schedule</i> Office Hours</h2>
+      <p class="subtitle">Sets the one-hour booking times students see. Currently: <strong>${escapeHtml(officeHoursText(settings))}</strong>.</p>
+
+      <div class="office-grid">
+        <label>Opens at
+          <select id="openHour" class="admin-input">${hourOptions(6, 12, settings.openHour)}</select>
+        </label>
+        <label>Closes at
+          <select id="closeHour" class="admin-input">${hourOptions(12, 21, settings.closeHour)}</select>
+        </label>
+        <label>Lunch break
+          <select id="lunchHour" class="admin-input">
+            <option value="" ${settings.lunchHour == null ? "selected" : ""}>No lunch break</option>
+            ${hourOptions(10, 14, settings.lunchHour)}
+          </select>
+        </label>
+      </div>
+      <p class="modal-hint" id="slotPreview"></p>
+      <button type="button" class="primary-btn" id="saveHoursBtn">Save Office Hours</button>
+    </div>
+
+    <div class="admin-card office-card">
+      <h2><i class="material-icons">event_busy</i> Holidays &amp; Closures</h2>
+      <p class="subtitle">The office is closed for everyone on these days. Students can't book them.</p>
+      <div class="office-grid">
+        <label>Date
+          <input type="date" id="holidayDate" class="admin-input" min="${today}">
+        </label>
+        <label>Name
+          <input type="text" id="holidayName" class="admin-input" maxlength="60" placeholder="e.g. Bonifacio Day">
+        </label>
+        <div class="office-add"><button type="button" class="primary-btn" id="addHolidayBtn"><i class="material-icons">add</i> Add Closure</button></div>
+      </div>
+      <ul class="holiday-list">
+        ${
+          holidays.length
+            ? holidays
+                .map(
+                  (h) => `
+          <li class="${h.date < today ? "past" : ""}">
+            <span><strong>${parseDate(h.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</strong> · ${escapeHtml(h.name)}</span>
+            <button type="button" class="roster-btn danger" data-remove-holiday="${h.date}"><i class="material-icons">delete</i> Remove</button>
+          </li>`,
+                )
+                .join("")
+            : '<li class="empty-msg">No closures added.</li>'
+        }
+      </ul>
+    </div>
+  `;
+
+  const read = () => {
+    const lunch = container.querySelector("#lunchHour").value;
+    return {
+      ...settings,
+      openHour: Number(container.querySelector("#openHour").value),
+      closeHour: Number(container.querySelector("#closeHour").value),
+      lunchHour: lunch === "" ? null : Number(lunch),
+    };
+  };
+  const preview = container.querySelector("#slotPreview");
+  const updatePreview = () => {
+    const slots = getSlots(read());
+    preview.textContent = slots.length
+      ? `${slots.length} booking times a day: ${slots.map(formatTime12).join(", ")}`
+      : "No booking times. Check the hours.";
+  };
+  container
+    .querySelectorAll("#openHour, #closeHour, #lunchHour")
+    .forEach((s) => {
+      s.onchange = updatePreview;
+    });
+  updatePreview();
+
+  // Existing bookings are kept; the admin is told so counselors can follow up
+  const confirmAffected = (next) => {
+    const affected = bookingsOutside(next).length;
+    return (
+      affected === 0 ||
+      window.confirm(
+        `${affected} upcoming pending/approved session(s) fall outside these hours or on a closure. They will stay booked, so counselors should reschedule them. Continue?`,
+      )
+    );
+  };
+
+  container.querySelector("#saveHoursBtn").onclick = () => {
+    const next = read();
+    if (next.openHour >= next.closeHour) {
+      alert("Closing time must be after opening time.");
+      return;
+    }
+    if (
+      next.lunchHour != null &&
+      (next.lunchHour <= next.openHour || next.lunchHour >= next.closeHour - 1)
+    ) {
+      alert(
+        "Lunch must fall inside office hours, not at the first or last hour.",
+      );
+      return;
+    }
+    if (!confirmAffected(next)) return;
+    saveSettings(next);
+    window.logActivity(
+      adminSession,
+      `Changed office hours to ${officeHoursText(next)}`,
+    );
+    renderOfficeSettings(container);
+  };
+
+  container.querySelector("#addHolidayBtn").onclick = () => {
+    const date = container.querySelector("#holidayDate").value;
+    const name = container.querySelector("#holidayName").value.trim();
+    if (!date || !name) {
+      alert("Please enter both the date and a name for the closure.");
+      return;
+    }
+    if (settings.holidays.some((h) => h.date === date)) {
+      alert("That date is already closed.");
+      return;
+    }
+    const next = {
+      ...settings,
+      holidays: [...settings.holidays, { date, name }],
+    };
+    if (!confirmAffected(next)) return;
+    saveSettings(next);
+    window.logActivity(adminSession, `Added office closure ${date} (${name})`);
+    renderOfficeSettings(container);
+  };
+
+  container.querySelectorAll("[data-remove-holiday]").forEach((btn) => {
+    btn.onclick = () => {
+      const date = btn.dataset.removeHoliday;
+      saveSettings({
+        ...settings,
+        holidays: settings.holidays.filter((h) => h.date !== date),
+      });
+      window.logActivity(adminSession, `Removed office closure ${date}`);
+      renderOfficeSettings(container);
+    };
+  });
 }
 
 export function renderLogsView(container) {
@@ -611,7 +910,9 @@ window.resetStudentPassword = async (id) => {
   if (!window.confirm(`Reset the password for ${student.name}?`)) return;
 
   // Readable temporary password, e.g. "gg-7k2m9p"
-  const temp = `gg-${Math.random().toString(36).slice(2, 8)}`;
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const rand = crypto.getRandomValues(new Uint32Array(6));
+  const temp = `gg-${Array.from(rand, (n) => chars[n % chars.length]).join("")}`;
   student.pass = await hashPassword(temp);
   saveUsers(users);
   window.logActivity(adminSession, `Reset password for ${student.name}`);
@@ -651,7 +952,11 @@ function setupModalHandlers() {
       .value.trim();
 
     if (!name || !email) {
-      alert("Name and Email are strict required parameters!");
+      alert("Name and email are required.");
+      return;
+    }
+    if (password && password.length < 8) {
+      alert("Counselor passwords must be at least 8 characters.");
       return;
     }
 
@@ -822,9 +1127,12 @@ window.exportAppointmentsCsv = () => {
     ]);
   // Notes of any kind stay out of the export: only counselors should read them
   // Leading byte-order mark so Excel reads the file as UTF-8
-  const blob = new Blob([String.fromCharCode(0xfeff), toCsv([header, ...rows])], {
-    type: "text/csv;charset=utf-8",
-  });
+  const blob = new Blob(
+    [String.fromCharCode(0xfeff), toCsv([header, ...rows])],
+    {
+      type: "text/csv;charset=utf-8",
+    },
+  );
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `granby-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -917,6 +1225,7 @@ function getAnalytics() {
     courseBreakdown,
     statusBreakdown,
     ratings,
+    performance: getCounselorPerformance(apps, users),
     avgDaily,
     mostActiveYear: Object.keys(yearBreakdown).reduce(
       (a, b) => (yearBreakdown[b] > (yearBreakdown[a] || 0) ? b : a),

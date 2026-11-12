@@ -7,7 +7,9 @@ import { renderAdminView } from "./admin.js";
 import { initGoogleAuth, handleSignOut } from "./calendar.js";
 import { hashPassword } from "./syncUtil.js";
 import { getUsers, migrateData, toDateStr } from "./store.js";
+import { startReminderService } from "./reminders.js";
 import "./styles/styles.css";
+import "./styles/features.css";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 
@@ -167,14 +169,59 @@ function handleLogout() {
   window.location.reload();
 }
 
-async function handleLogin(identifier, p, showError) {
+// Brute-force protection: lock an identifier after repeated wrong passwords
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MS = 5 * 60 * 1000;
+
+function readAttempts() {
+  try {
+    return JSON.parse(localStorage.getItem("gh_login_attempts")) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAttempts(attempts) {
+  localStorage.setItem("gh_login_attempts", JSON.stringify(attempts));
+}
+
+async function handleLogin(rawIdentifier, p, showError) {
+  const identifier = String(rawIdentifier || "")
+    .trim()
+    .toLowerCase();
+  if (!identifier || !p) {
+    return showError("Please enter your username/email and password.");
+  }
+
+  const attempts = readAttempts();
+  const record = attempts[identifier];
+  if (record && record.lockedUntil > Date.now()) {
+    const mins = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+    return showError(
+      `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`,
+    );
+  }
+
   const users = JSON.parse(localStorage.getItem("gh_users")) || [];
   const inputHash = await hashPassword(p);
 
   const found = users.find(
     (u) =>
-      (u.user === identifier || u.email === identifier) && u.pass === inputHash,
+      (String(u.user).toLowerCase() === identifier ||
+        String(u.email).toLowerCase() === identifier) &&
+      u.pass === inputHash,
   );
+
+  if (found) {
+    delete attempts[identifier];
+  } else {
+    const count = (record?.count || 0) + 1;
+    attempts[identifier] = {
+      count: count >= MAX_LOGIN_ATTEMPTS ? 0 : count,
+      lockedUntil: count >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0,
+    };
+  }
+  writeAttempts(attempts);
 
   if (found && found.active === false) {
     showError(
@@ -190,7 +237,12 @@ async function handleLogin(identifier, p, showError) {
     root.onchange = null;
     initApp();
   } else {
-    showError("Invalid username/email or password.");
+    const left = MAX_LOGIN_ATTEMPTS - (attempts[identifier].count || 0);
+    showError(
+      attempts[identifier].lockedUntil
+        ? "Too many failed attempts. Try again in 5 minutes."
+        : `Invalid username/email or password. ${left} attempt${left === 1 ? "" : "s"} left.`,
+    );
   }
 }
 
@@ -205,8 +257,31 @@ async function handleRegister(
   showError,
   showSuccess,
 ) {
+  const username = String(u || "").trim();
+  const cleanEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+
+  if (!/^[a-zA-Z0-9._]{3,20}$/.test(username)) {
+    return showError(
+      "Username must be 3–20 characters: letters, numbers, dots or underscores.",
+    );
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
+    return showError("Please enter a valid email address.");
+  }
+  if (p.length < 8 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) {
+    return showError(
+      "Password must be at least 8 characters and include a letter and a number.",
+    );
+  }
+
   const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const exists = users.some((user) => user.user === u || user.email === email);
+  const exists = users.some(
+    (user) =>
+      String(user.user).toLowerCase() === username.toLowerCase() ||
+      String(user.email).toLowerCase() === cleanEmail,
+  );
 
   if (exists) {
     return showError("Username or Email already exists!");
@@ -217,9 +292,9 @@ async function handleRegister(
   const newUser = {
     id: Date.now(),
     name,
-    user: u,
+    user: username,
     pass: securedHash,
-    email,
+    email: cleanEmail,
     yearLevel: yl,
     course,
     section: sec,
@@ -324,6 +399,8 @@ const initializeSystemSequence = async () => {
   seedAppointments();
   await migrateData();
   initApp();
+  // Day-before and hour-before reminders for approved sessions
+  startReminderService();
 };
 
 // 🏁 FIX: Initialize Google Auth silently without looking for the deleted listener function

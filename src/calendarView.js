@@ -2,11 +2,13 @@
 // --- COUNSELOR WEEK CALENDAR + DAYS OFF ---
 import { escapeHtml } from "./syncUtil.js";
 import {
-  SLOTS,
+  getSlots,
+  getHoliday,
   getAppointments,
   getBlocks,
   saveBlocks,
   isDayOff,
+  notifyWaitlistForDay,
   toDateStr,
   parseDate,
   formatTime12,
@@ -86,6 +88,14 @@ export function renderCounselorCalendar(container, session) {
           <div class="cal-corner"></div>
           ${days
             .map((date) => {
+              const holiday = getHoliday(date);
+              if (holiday) {
+                return `
+              <div class="cal-day-head off" title="Office closed for everyone (set by the admin)">
+                ${dayLabel(date)}
+                <small>${escapeHtml(holiday.name)}</small>
+              </div>`;
+              }
               const off = isDayOff(session.id, date);
               return `
               <button type="button" class="cal-day-head ${date === today ? "today" : ""} ${off ? "off" : ""}"
@@ -95,17 +105,19 @@ export function renderCounselorCalendar(container, session) {
               </button>`;
             })
             .join("")}
-          ${SLOTS.map(
-            (time) => `
+          ${getSlots()
+            .map(
+              (time) => `
             <div class="cal-time">${formatTime12(time)}</div>
             ${days
               .map((date) =>
-                isDayOff(session.id, date)
+                isDayOff(session.id, date) || getHoliday(date)
                   ? `<div class="cal-cell off"></div>`
                   : cell(date, time),
               )
               .join("")}`,
-          ).join("")}
+            )
+            .join("")}
         </div>
       </div>
     </div>
@@ -119,7 +131,7 @@ export function renderCounselorCalendar(container, session) {
     };
   });
 
-  container.querySelectorAll(".cal-day-head").forEach((btn) => {
+  container.querySelectorAll("button.cal-day-head").forEach((btn) => {
     btn.onclick = () => toggleDayOff(container, session, btn.dataset.date);
   });
 }
@@ -133,6 +145,8 @@ function toggleDayOff(container, session, date) {
   if (existing) {
     saveBlocks(blocks.filter((b) => b !== existing));
     window.logActivity(session, `Marked ${date} as available`);
+    // Students waiting for this counselor's times that day can book now
+    notifyWaitlistForDay(date, session.id);
   } else {
     const booked = getAppointments().filter(
       (a) =>

@@ -21,6 +21,8 @@ import {
   appointmentStart,
   formatTime12,
   toDateStr,
+  getConcerns,
+  updateConcern,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { renderCounselorCalendar } from "./calendarView.js";
@@ -36,6 +38,7 @@ import {
   renderStudentRecords,
   renderGuidanceSettings,
   renderLogs,
+  renderConcerns,
   formatDateShort,
 } from "./guidanceView.js";
 
@@ -45,6 +48,8 @@ emailjs.init("6_rFpZEVOh3AVEsIM");
 let currentSession = null;
 // Status filter chosen on the Appointments table
 let tableFilter = "all";
+// Filter chosen on the Concerns tab
+let concernFilter = "open";
 
 // Appointments assigned to this counselor, plus unassigned ("Any Available") requests
 function getMyAppointments() {
@@ -110,6 +115,7 @@ export function renderAppointmentsTable() {
 
   // Pending first, then sessions waiting to be closed, then upcoming, then history
   const rank = (a) => {
+    if (a.status === "pending" && a.checkIn?.safetyFlag) return -1;
     if (a.status === "pending") return a.urgent ? 0 : 1;
     if (needsClosing(a)) return 2;
     if (a.status === "approved") return 3;
@@ -205,7 +211,12 @@ function openDecisionModal(app, status) {
         return false;
       }
 
-      const changes = { status, counselorNotes: notes };
+      // decidedAt feeds the admin's response-time report
+      const changes = {
+        status,
+        counselorNotes: notes,
+        decidedAt: new Date().toISOString(),
+      };
       if (isApprove) {
         const time = card.querySelector("#decisionTime").value;
         if (!isCounselorFree(currentSession.id, app.date, time, app.id)) {
@@ -495,6 +506,8 @@ function renderTab(target) {
     const me = getUserById(currentSession.id) || currentSession;
     content.innerHTML = renderGuidanceSettings(me.notifyEmail || me.email);
     attachSettingsListener();
+  } else if (target === "concerns") {
+    content.innerHTML = renderConcerns(getConcerns(), concernFilter);
   } else if (target === "logs") {
     const activities = getMyAppointments()
       .filter((app) => app.updatedAt)
@@ -510,6 +523,12 @@ function refreshCurrentView() {
   if (target === "appointments" && !(search && search.value)) {
     renderAppointmentsTable();
   } else if (target === "calendar" || target === "logs") {
+    renderTab(target);
+  } else if (
+    target === "concerns" &&
+    !document.activeElement?.closest?.(".concern-form")
+  ) {
+    // Don't wipe a reply the counselor is typing
     renderTab(target);
   }
   updateSidebarBadges();
@@ -562,6 +581,11 @@ export function renderGuidanceView(root, session, onLogout) {
                     <button class="nav-item" data-target="students">
                         <i class="material-icons">people</i>
                         <span>Student Records</span>
+                    </button>
+                    <button class="nav-item" data-target="concerns">
+                        <i class="material-icons">shield</i>
+                        <span>Concerns</span>
+                        <span class="badge" id="concernBadge">0</span>
                     </button>
 
                     <button class="nav-item" data-target="logs">
@@ -619,6 +643,36 @@ function updateSidebarBadges() {
     badge.title = "Pending requests and sessions to close";
     badge.style.display = count > 0 ? "block" : "none";
   }
+
+  const newConcerns = getConcerns().filter((c) => c.status === "new").length;
+  const concernBadge = document.getElementById("concernBadge");
+  if (concernBadge) {
+    concernBadge.innerText = newConcerns;
+    concernBadge.title = "New anonymous concerns";
+    concernBadge.style.display = newConcerns > 0 ? "block" : "none";
+  }
+}
+
+function saveConcernCard(btn) {
+  const id = Number(btn.dataset.id);
+  const card = btn.closest(".concern-card");
+  const before = getConcerns().find((c) => c.id === id);
+  if (!before || !card) return;
+
+  const status = card.querySelector(".concern-status").value;
+  const updated = updateConcern(id, {
+    status,
+    response: card.querySelector(".concern-response").value.trim(),
+    internalNotes: card.querySelector(".concern-notes").value.trim(),
+    handledBy: currentSession.name,
+  });
+  window.logActivity(
+    currentSession,
+    `Updated anonymous concern ${updated.ref} (${status})`,
+  );
+  btn.blur();
+  renderTab("concerns");
+  updateSidebarBadges();
 }
 
 function attachSettingsListener() {
@@ -645,6 +699,8 @@ function attachSettingsListener() {
   }
 
   let generatedOTP = null;
+  let otpExpiresAt = 0;
+  let otpTriesLeft = 0;
   const requestBtn = document.getElementById("requestOtpBtn");
   const verifyBtn = document.getElementById("verifyOtpBtn");
   const otpContainer = document.getElementById("otpContainer");
@@ -660,11 +716,14 @@ function attachSettingsListener() {
       // Send the OTP to the logged-in counselor's own account email
       const recipientEmail = currentSession.email;
 
-      generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString(
-        [],
-        { hour: "2-digit", minute: "2-digit" },
-      );
+      const rand = crypto.getRandomValues(new Uint32Array(1))[0];
+      generatedOTP = String(100000 + (rand % 900000));
+      otpExpiresAt = Date.now() + 15 * 60000;
+      otpTriesLeft = 5;
+      const expiryTime = new Date(otpExpiresAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
       requestBtn.innerText = "Sending OTP...";
       requestBtn.disabled = true;
@@ -689,7 +748,21 @@ function attachSettingsListener() {
   }
 
   if (verifyBtn) {
+    const resetOtp = (message) => {
+      generatedOTP = null;
+      otpContainer.classList.add("hidden");
+      otpInput.value = "";
+      requestBtn.classList.remove("hidden");
+      requestBtn.disabled = false;
+      requestBtn.innerText = "Request OTP to Change Password";
+      alert(message);
+    };
+
     verifyBtn.onclick = async () => {
+      if (generatedOTP && Date.now() > otpExpiresAt) {
+        resetOtp("This code has expired. Please request a new one.");
+        return;
+      }
       if (generatedOTP && otpInput.value.trim() === generatedOTP) {
         const users = getUsers();
         const me = users.find((u) => u.id === currentSession.id);
@@ -709,7 +782,12 @@ function attachSettingsListener() {
           requestBtn.innerText = "Request OTP to Change Password";
         }
       } else {
-        alert("Invalid OTP code.");
+        otpTriesLeft -= 1;
+        if (otpTriesLeft <= 0) {
+          resetOtp("Too many wrong codes. Please request a new one.");
+        } else {
+          alert(`Invalid OTP code. ${otpTriesLeft} attempt(s) left.`);
+        }
       }
     };
   }
@@ -779,6 +857,19 @@ function setupAdminListeners(onLogout) {
 
     if (e.target.closest("#logWalkInBtn")) {
       openWalkInModal();
+      return;
+    }
+
+    const concernFilterBtn = e.target.closest("[data-concern-filter]");
+    if (concernFilterBtn) {
+      concernFilter = concernFilterBtn.dataset.concernFilter;
+      renderTab("concerns");
+      return;
+    }
+
+    const concernSave = e.target.closest(".concern-save");
+    if (concernSave) {
+      saveConcernCard(concernSave);
       return;
     }
 

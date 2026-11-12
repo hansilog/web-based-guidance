@@ -4,12 +4,15 @@ our title is web based guidance management and scheduling system.
 ## Features
 
 **Students**
-- Book one-hour sessions (Mon–Fri, 8 AM–5 PM, lunch 12–1) from open time slots; taken times and counselor days off are blocked
+- Book one-hour sessions within office hours (default Mon–Fri, 8 AM–5 PM, lunch 12–1; set by the admin) from open time slots; taken times and counselor days off are blocked
 - Pick a counselor or "Any Available" (assigned to the free counselor with the lightest load)
 - Reschedule or cancel pending/upcoming sessions, rate completed sessions (1–5 stars)
 - Notification bell for approvals, rejections, completed sessions, and follow-up recommendations
 - Printable appointment slip for approved upcoming sessions (leaves out the counseling type and notes)
 - Appointment history, Google Calendar sync, Granby AI campus chat
+- Waitlist for taken times: notified when a spot opens, with "Book now" on the Dashboard
+- Optional 5-question wellbeing check-in at booking; worrying answers mark the request urgent and show crisis hotlines
+- Reminders a day before and an hour before approved sessions (notification, plus email the day before)
 
 **Guidance counselors**
 - Overview: pending, urgent, today's and needs-closing counts that filter the queue when clicked
@@ -18,7 +21,9 @@ our title is web based guidance management and scheduling system.
 - Appointment queue with status filter; approve (with time change) or reject with a reason
 - Close sessions as Completed (private case notes, follow-up recommendation) or No-show
 - Student case file with full timeline and AI case summary
-- Week calendar with days off
+- Week calendar with days off (removing a day off notifies waitlisted students)
+- Wellbeing check-in tags in the queue (Low / Moderate / High / Safety flag); safety-flagged requests sort first
+- Anonymous concerns inbox: set status, reply to the reporter, keep internal notes
 - Notification bell, activity log, notification email and password settings
 
 **Admin**
@@ -26,9 +31,16 @@ our title is web based guidance management and scheduling system.
 - Manage students: search, deactivate/activate, reset password
 - Reports: request types, statuses, year level, course, satisfaction ratings; CSV export and printable report
 - Global announcements, full activity log
+- Office hours (opening, closing, lunch) and office-wide holidays/closures
+- Counselor performance: completed sessions, last 7 days, active load, no-show rate, rating, response time
+
+**Public (no account)**
+- Anonymous concern box on the landing page with a reference code to check for a reply
 
 **Security basics** — data privacy consent at registration, hashed passwords, session re-checked against the user list on every load,
-deactivated accounts blocked, 15-minute idle logout, user input escaped before display.
+deactivated accounts blocked, 15-minute idle logout, user input escaped before display,
+5-minute login lockout after 5 wrong passwords, password rules (8+ characters with a letter and a number),
+password-reset codes that expire after 10 minutes and allow 5 tries, case-insensitive usernames/emails.
 
 ## Project structure
 
@@ -38,7 +50,9 @@ src/
 ├── index.html       # HTML template
 ├── landing.js       # Landing page
 ├── auth.js          # Login / register / forgot-password (EmailJS OTP)
-├── store.js         # Data layer: storage access, time slots, availability, auto-assign, notifications
+├── store.js         # Data layer: storage, office settings, availability, waitlist, concerns, notifications
+├── reminders.js     # Day-before / hour-before session reminders
+├── checkin.js       # Wellbeing check-in questions, scoring, and counselor views
 ├── ui.js            # Shared dialog + notification bell
 ├── student.js       # Student portal (dashboard, booking, reschedule, rating, history, settings, AI chat)
 ├── guidance.js      # Counselor portal logic
@@ -48,12 +62,19 @@ src/
 ├── ai.js            # Gemini chat assistant + case summaries
 ├── calendar.js      # Google Calendar sync
 ├── syncUtil.js      # Shared helpers: hashing, HTML escaping, cross-tab sync, activity log, banner
-└── styles/          # CSS per portal; styles.css holds the shared feature styles
+└── styles/          # CSS per portal; styles.css + features.css hold the shared feature styles
 ```
 
 All data is stored in the browser (`localStorage` / `sessionStorage`); there is no backend.
 This means data is per-browser, and a technical user could still edit it with DevTools.
 Moving to a real backend (e.g. Firebase) is the next step for production use.
+New features keep their data access in `store.js`, which is the layer to swap for database calls.
+Some older code (login/register, student profile settings, broadcasts, admin analytics, activity log)
+still calls `localStorage` directly; move those into `store.js` first.
+Until then, reminders and waitlist alerts only go out while the app is open in a browser;
+with a backend they should move to a scheduled server job.
+
+Check-in answers stay out of the AI case summary, the CSV export, emails and the printed slip.
 
 ## Demo accounts
 

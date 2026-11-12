@@ -34,28 +34,24 @@ export const getCounselors = () =>
 
 export function updateAppointment(id, changes) {
   let updated = null;
+  let previous = null;
   const apps = getAppointments().map((a) => {
     if (a.id !== id) return a;
+    previous = a;
     updated = { ...a, ...changes, updatedAt: new Date().toISOString() };
+    // A new date or time needs fresh reminders
+    if (updated.date !== a.date || updated.time !== a.time) {
+      updated.reminders = {};
+    }
     return updated;
   });
   saveAppointments(apps);
+  if (previous) releaseSlotIfFreed(previous, updated);
   return updated;
 }
 
 // --- 2. DATES & TIMES ---
 
-// One-hour sessions inside office hours, lunch break at 12:00
-export const SLOTS = [
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-];
 export const ACTIVE_STATUSES = ["pending", "approved"];
 export const MAX_DAYS_AHEAD = 60;
 
@@ -111,6 +107,48 @@ export function to24h(time) {
   return `${String(h).padStart(2, "0")}:${match[2]}`;
 }
 
+// --- 2b. OFFICE SETTINGS (set by the admin) ---
+
+// Hours are whole 24-hour numbers; lunchHour null means no lunch break.
+// holidays: [{ date: "YYYY-MM-DD", name }] closes the office for everyone.
+export const DEFAULT_SETTINGS = {
+  openHour: 8,
+  closeHour: 17,
+  lunchHour: 12,
+  holidays: [],
+};
+
+export function getSettings() {
+  return { ...DEFAULT_SETTINGS, ...read("gh_settings", {}) };
+}
+
+export const saveSettings = (settings) => write("gh_settings", settings);
+
+// One-hour session start times inside office hours, skipping lunch
+export function getSlots(settings = getSettings()) {
+  const slots = [];
+  for (let h = settings.openHour; h < settings.closeHour; h++) {
+    if (h !== settings.lunchHour)
+      slots.push(`${String(h).padStart(2, "0")}:00`);
+  }
+  return slots;
+}
+
+export function getHoliday(date) {
+  return getSettings().holidays.find((h) => h.date === date) || null;
+}
+
+const hourLabel = (h) => `${h % 12 || 12}${h >= 12 ? "PM" : "AM"}`;
+
+// e.g. "Mon–Fri, 8AM – 5PM (lunch 12–1PM)"
+export function officeHoursText(settings = getSettings()) {
+  const lunch =
+    settings.lunchHour == null
+      ? ""
+      : ` (lunch ${settings.lunchHour % 12 || 12}–${hourLabel(settings.lunchHour + 1)})`;
+  return `Mon–Fri, ${hourLabel(settings.openHour)} – ${hourLabel(settings.closeHour)}${lunch}`;
+}
+
 // --- 3. AVAILABILITY ---
 
 export function isDayOff(counselorId, date) {
@@ -127,6 +165,10 @@ export function checkDate(date, counselorId = null) {
   if (day < today) return "That date has already passed.";
   if (day.getDay() === 0 || day.getDay() === 6) {
     return "The guidance office is closed on weekends.";
+  }
+  const holiday = getHoliday(date);
+  if (holiday) {
+    return `The guidance office is closed on this day (${holiday.name}).`;
   }
   if ((day - today) / 86400000 > MAX_DAYS_AHEAD) {
     return `You can book up to ${MAX_DAYS_AHEAD} days ahead.`;
@@ -160,7 +202,7 @@ export function isCounselorFree(counselorId, date, time, ignoreAppId = null) {
 export function getSlotStates(date, counselorId, ignoreAppId = null) {
   const now = new Date();
   const counselors = getCounselors();
-  return SLOTS.map((time) => {
+  return getSlots().map((time) => {
     const start = appointmentStart({ date, time });
     if (start <= now) return { time, free: false, reason: "Past" };
     const free =
@@ -276,4 +318,171 @@ export function toCsv(rows) {
         .join(","),
     )
     .join("\r\n");
+}
+
+// --- 7. WAITLIST: students waiting for a taken time ---
+// Entry: { id, studentId, date, time, counselorId (number or "auto"), createdAt, notifiedAt }
+
+export const getWaitlist = () => read("gh_waitlist", []);
+export const saveWaitlist = (list) => write("gh_waitlist", list);
+
+// Drop entries whose time has passed
+function liveWaitlist() {
+  const now = new Date();
+  return getWaitlist().filter((w) => appointmentStart(w) > now);
+}
+
+export function getMyWaitlist(studentId) {
+  return liveWaitlist()
+    .filter((w) => w.studentId === studentId)
+    .sort((a, b) => appointmentStart(a) - appointmentStart(b));
+}
+
+export function isOnWaitlist(studentId, date, time, counselorId) {
+  return getWaitlist().some(
+    (w) =>
+      w.studentId === studentId &&
+      w.date === date &&
+      w.time === time &&
+      w.counselorId === counselorId,
+  );
+}
+
+export function joinWaitlist({ studentId, date, time, counselorId }) {
+  if (isOnWaitlist(studentId, date, time, counselorId)) return false;
+  saveWaitlist([
+    ...liveWaitlist(),
+    {
+      id: Date.now() + Math.random(),
+      studentId,
+      date,
+      time,
+      counselorId,
+      createdAt: new Date().toISOString(),
+      notifiedAt: null,
+    },
+  ]);
+  return true;
+}
+
+export function leaveWaitlist(entryId) {
+  saveWaitlist(getWaitlist().filter((w) => w.id !== entryId));
+}
+
+// Once a student has a booking that day, their waitlist entries for it are done
+export function clearWaitlistForDay(studentId, date) {
+  saveWaitlist(
+    getWaitlist().filter(
+      (w) => !(w.studentId === studentId && w.date === date),
+    ),
+  );
+}
+
+// Tell everyone waiting for this time that it is open. First to book gets it.
+export function notifyWaitlist(date, time, counselorId) {
+  const start = appointmentStart({ date, time });
+  if (start <= new Date()) return 0;
+  let count = 0;
+  const list = liveWaitlist().map((w) => {
+    const matches =
+      w.date === date &&
+      w.time === time &&
+      (w.counselorId === "auto" || w.counselorId === counselorId);
+    if (!matches || !isCounselorFree(counselorId, date, time)) return w;
+    count += 1;
+    addNotification(
+      w.studentId,
+      `A spot opened up on ${parseDate(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${formatTime12(time)}. Book it from your Dashboard before someone else does.`,
+    );
+    return { ...w, notifiedAt: new Date().toISOString() };
+  });
+  saveWaitlist(list);
+  return count;
+}
+
+// Every slot of a day, e.g. after a counselor removes a day off
+export function notifyWaitlistForDay(date, counselorId) {
+  getSlots().forEach((time) => notifyWaitlist(date, time, counselorId));
+}
+
+// Called by updateAppointment: an active booking that leaves its slot frees it
+function releaseSlotIfFreed(before, after) {
+  if (!ACTIVE_STATUSES.includes(before.status) || !before.counselorId) return;
+  const moved =
+    !ACTIVE_STATUSES.includes(after.status) ||
+    after.date !== before.date ||
+    after.time !== before.time ||
+    after.counselorId !== before.counselorId;
+  if (moved) notifyWaitlist(before.date, before.time, before.counselorId);
+}
+
+// --- 8. ANONYMOUS CONCERNS ---
+// { id, ref, category, description, location, when, contact,
+//   status: "new" | "reviewing" | "resolved", response, internalNotes,
+//   handledBy, createdAt, updatedAt }
+
+export const CONCERN_CATEGORIES = [
+  "Bullying",
+  "Harassment",
+  "Worried about a friend",
+  "Safety concern on campus",
+  "Discrimination",
+  "Other",
+];
+
+export const CONCERN_STATUSES = {
+  new: "New",
+  reviewing: "Being reviewed",
+  resolved: "Resolved",
+};
+
+export const getConcerns = () => read("gh_concerns", []);
+export const saveConcerns = (list) => write("gh_concerns", list);
+
+// Short code the reporter keeps to check for a reply (no look-alike characters)
+function makeConcernRef() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const taken = new Set(getConcerns().map((c) => c.ref));
+  let ref = "";
+  do {
+    const rand = crypto.getRandomValues(new Uint32Array(6));
+    ref = `GC-${Array.from(rand, (n) => chars[n % chars.length]).join("")}`;
+  } while (taken.has(ref));
+  return ref;
+}
+
+export function addConcern(fields) {
+  const stamp = new Date().toISOString();
+  const concern = {
+    id: Date.now(),
+    ref: makeConcernRef(),
+    status: "new",
+    response: "",
+    internalNotes: "",
+    handledBy: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+    ...fields,
+  };
+  saveConcerns([...getConcerns(), concern]);
+  return concern;
+}
+
+export function updateConcern(id, changes) {
+  let updated = null;
+  saveConcerns(
+    getConcerns().map((c) => {
+      if (c.id !== id) return c;
+      updated = { ...c, ...changes, updatedAt: new Date().toISOString() };
+      return updated;
+    }),
+  );
+  return updated;
+}
+
+export function findConcernByRef(ref) {
+  const clean = String(ref || "")
+    .trim()
+    .toUpperCase();
+  return getConcerns().find((c) => c.ref === clean) || null;
 }
