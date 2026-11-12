@@ -50,7 +50,8 @@ src/
 ├── index.html       # HTML template
 ├── landing.js       # Landing page
 ├── auth.js          # Login / register / forgot-password (EmailJS OTP)
-├── store.js         # Data layer: storage, office settings, availability, waitlist, concerns, notifications
+├── store.js         # Data layer (the only file that touches shared storage): users, appointments,
+│                    #   office settings, availability, waitlist, concerns, notifications, logs, broadcasts
 ├── reminders.js     # Day-before / hour-before session reminders
 ├── checkin.js       # Wellbeing check-in questions, scoring, and counselor views
 ├── ui.js            # Shared dialog + notification bell
@@ -61,16 +62,17 @@ src/
 ├── admin.js         # Admin portal (staff, students, reports, broadcasts, logs)
 ├── ai.js            # Gemini chat assistant + case summaries
 ├── calendar.js      # Google Calendar sync
-├── syncUtil.js      # Shared helpers: hashing, HTML escaping, cross-tab sync, activity log, banner
+├── syncUtil.js      # Shared helpers: hashing, HTML escaping, cross-tab sync, announcement banner
 └── styles/          # CSS per portal; styles.css + features.css hold the shared feature styles
 ```
 
 All data is stored in the browser (`localStorage` / `sessionStorage`); there is no backend.
 This means data is per-browser, and a technical user could still edit it with DevTools.
 Moving to a real backend (e.g. Firebase) is the next step for production use.
-New features keep their data access in `store.js`, which is the layer to swap for database calls.
-Some older code (login/register, student profile settings, broadcasts, admin analytics, activity log)
-still calls `localStorage` directly; move those into `store.js` first.
+All shared data (users, appointments, days off, notifications, waitlist, concerns, office settings,
+broadcasts, activity log, login attempts) is read and written only through `store.js`, so that is the
+one file to swap for database calls. Only per-browser state stays outside it: the login session,
+the Google Calendar token, the Gemini key and the concern-form spam guard.
 Until then, reminders and waitlist alerts only go out while the app is open in a browser;
 with a backend they should move to a scheduled server job.
 

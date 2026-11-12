@@ -1,5 +1,6 @@
 import emailjs from "@emailjs/browser";
 import { hashPassword } from "./syncUtil.js";
+import { findUserByEmail, updateUser } from "./store.js";
 import "./styles/auth.css";
 
 // Initialize EmailJS
@@ -190,7 +191,6 @@ export function renderLoginPage(
           .getElementById("resetEmail")
           .value.trim()
           .toLowerCase();
-        const sameEmail = (u) => String(u.email).toLowerCase() === emailVal;
 
         // An expired code or too many wrong guesses means starting over
         if (generatedOTP && Date.now() > otpExpiresAt) {
@@ -200,8 +200,9 @@ export function renderLoginPage(
         }
 
         if (!generatedOTP) {
-          const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
-          if (!users.find(sameEmail)) return showError("Email not registered.");
+          if (!findUserByEmail(emailVal)) {
+            return showError("Email not registered.");
+          }
 
           // Cryptographically random 6-digit code
           const rand = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -234,12 +235,11 @@ export function renderLoginPage(
               "New password must be at least 8 characters and include a letter and a number.",
             );
 
-          const users = JSON.parse(localStorage.getItem("gh_users") || "[]");
-          const index = users.findIndex(sameEmail);
-          if (index === -1) return showError("Email not registered.");
+          const user = findUserByEmail(emailVal);
+          if (!user) return showError("Email not registered.");
 
-          users[index].pass = await hashPassword(newPass);
-          localStorage.setItem("gh_users", JSON.stringify(users));
+          updateUser(user.id, { pass: await hashPassword(newPass) });
+          window.logActivity(user, "Reset password with email code");
           generatedOTP = null;
           alert("Password updated!");
           isForgotFlow = false;

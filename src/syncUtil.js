@@ -35,27 +35,10 @@ export function listenForRealTimeUpdates(renderCallback) {
   });
 }
 
-window.logActivity = (user, action) => {
-  const logs = JSON.parse(localStorage.getItem("gh_activity_logs") || "[]");
+// window.logActivity is defined in store.js next to the activity log data
 
-  const newLog = {
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-    userName: user.name,
-    userRole: user.role, // 'student' or 'guidance'
-    action, // e.g., "Logged in", "Created Appointment", "Updated Status"
-  };
-
-  logs.push(newLog);
-  // Keep the newest 1000 entries so localStorage (~5 MB) never fills up
-  localStorage.setItem("gh_activity_logs", JSON.stringify(logs.slice(-1000)));
-};
-
-export function renderBroadcastBanner() {
-  const broadcasts = JSON.parse(
-    localStorage.getItem("gh_global_broadcasts") || "[]",
-  );
-
+// Pass in getBroadcasts() from store.js (keeps this file free of storage calls)
+export function renderBroadcastBanner(broadcasts = []) {
   // If there are no broadcasts, return an empty string to avoid rendering empty UI
   if (broadcasts.length === 0) return "";
 

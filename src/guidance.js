@@ -23,6 +23,7 @@ import {
   toDateStr,
   getConcerns,
   updateConcern,
+  getBroadcasts,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { renderCounselorCalendar } from "./calendarView.js";
@@ -542,7 +543,8 @@ export function renderGuidanceView(root, session, onLogout) {
   // Mount the real-time syncing subscription hook exactly ONCE
   listenForRealTimeUpdates(() => {
     const broadcastSlot = document.getElementById("broadcast-slot");
-    if (broadcastSlot) broadcastSlot.innerHTML = renderBroadcastBanner();
+    if (broadcastSlot)
+      broadcastSlot.innerHTML = renderBroadcastBanner(getBroadcasts());
     refreshBell(session.id);
     refreshCurrentView();
   });
@@ -620,7 +622,7 @@ export function renderGuidanceView(root, session, onLogout) {
                 </div>
             </header>
 
-            <div id="broadcast-slot">${renderBroadcastBanner()}</div>
+            <div id="broadcast-slot">${renderBroadcastBanner(getBroadcasts())}</div>
             <section id="admin-dynamic-content"></section>
         </main>
     </div>

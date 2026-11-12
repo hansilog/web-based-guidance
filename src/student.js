@@ -41,6 +41,10 @@ import {
   leaveWaitlist,
   isOnWaitlist,
   clearWaitlistForDay,
+  getBroadcasts,
+  updateUser,
+  syncStudentOnAppointments,
+  findUserByEmail,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
@@ -830,26 +834,26 @@ export function renderSettings(container, session) {
       section: document.getElementById("setSection").value.trim(),
     };
 
-    const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-    const userIndex = users.findIndex((u) => u.id === session.id);
+    if (!updatedData.name) {
+      alert("Please enter your name.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(updatedData.email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    // The email is also a login name, so two accounts can't share it
+    const emailOwner = findUserByEmail(updatedData.email);
+    if (emailOwner && emailOwner.id !== session.id) {
+      alert("Another account already uses this email.");
+      return;
+    }
 
-    if (userIndex !== -1) {
-      // Update DB database arrays
-      users[userIndex] = { ...users[userIndex], ...updatedData };
-      localStorage.setItem("gh_users", JSON.stringify(users));
+    const updatedUser = updateUser(session.id, updatedData);
 
+    if (updatedUser) {
       // Keep the student's name/email on their existing appointments in sync
-      const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-      const syncedApps = apps.map((a) =>
-        a.studentId === session.id
-          ? {
-              ...a,
-              studentName: updatedData.name,
-              studentEmail: updatedData.email,
-            }
-          : a,
-      );
-      localStorage.setItem("gh_appointments", JSON.stringify(syncedApps));
+      syncStudentOnAppointments(updatedUser);
 
       // Update Active Session state parameters (the session lives in sessionStorage)
       const newSession = { ...session, ...updatedData };
@@ -860,9 +864,7 @@ export function renderSettings(container, session) {
       // Forces layout refresh engine context to pickup updated session states
       window.location.reload();
     } else {
-      alert(
-        "Error: Active student account profile not located in system ledger files.",
-      );
+      alert("Your account could not be found. Please sign in again.");
     }
   };
 }
@@ -1602,7 +1604,7 @@ export function renderStudentView(root, session, onLogout) {
                 </button>
                 ${renderBellHtml()}
             </div>
-            <div id="broadcast-slot">${renderBroadcastBanner()}</div>
+            <div id="broadcast-slot">${renderBroadcastBanner(getBroadcasts())}</div>
             <section id="dynamic-content">${renderDashboard(session)}</section>
         </main>
 
@@ -1640,7 +1642,8 @@ export function renderStudentView(root, session, onLogout) {
 
   listenForRealTimeUpdates(() => {
     const broadcastSlot = document.getElementById("broadcast-slot");
-    if (broadcastSlot) broadcastSlot.innerHTML = renderBroadcastBanner();
+    if (broadcastSlot)
+      broadcastSlot.innerHTML = renderBroadcastBanner(getBroadcasts());
     refreshBell(session.id);
     rerenderCurrentView(session);
   });

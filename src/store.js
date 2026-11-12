@@ -28,6 +28,106 @@ export const saveBlocks = (blocks) => write("gh_counselor_blocks", blocks);
 
 export const getUserById = (id) => getUsers().find((u) => u.id === id);
 
+// True once a collection has been saved, even if it is now empty (used for seeding)
+export const hasCollection = (key) => localStorage.getItem(key) !== null;
+
+const lower = (value) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+export const findUserByEmail = (email) =>
+  getUsers().find((u) => lower(u.email) === lower(email)) || null;
+
+// Login accepts a username or an email, in any letter case
+export const findUserByLogin = (identifier) =>
+  getUsers().find(
+    (u) =>
+      lower(u.user) === lower(identifier) ||
+      lower(u.email) === lower(identifier),
+  ) || null;
+
+export const isUsernameOrEmailTaken = (username, email, ignoreId = null) =>
+  getUsers().some(
+    (u) =>
+      u.id !== ignoreId &&
+      (lower(u.user) === lower(username) || lower(u.email) === lower(email)),
+  );
+
+export function addUser(user) {
+  saveUsers([...getUsers(), user]);
+  return user;
+}
+
+export function updateUser(id, changes) {
+  let updated = null;
+  saveUsers(
+    getUsers().map((u) => {
+      if (u.id !== id) return u;
+      updated = { ...u, ...changes };
+      return updated;
+    }),
+  );
+  return updated;
+}
+
+// A student's name/email is copied onto their appointments; keep them in sync
+export function syncStudentOnAppointments(student) {
+  saveAppointments(
+    getAppointments().map((a) =>
+      a.studentId === student.id
+        ? { ...a, studentName: student.name, studentEmail: student.email }
+        : a,
+    ),
+  );
+}
+
+// --- 1b. ACTIVITY LOG, BROADCASTS, LOGIN ATTEMPTS ---
+
+const MAX_LOGS = 1000;
+
+export const getActivityLogs = () => read("gh_activity_logs", []);
+
+export function addActivityLog(user, action) {
+  const entry = {
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    userName: user?.name || "Unknown",
+    userRole: user?.role || "unknown",
+    action,
+  };
+  // Keep the newest entries so localStorage (~5 MB) never fills up
+  write("gh_activity_logs", [...getActivityLogs(), entry].slice(-MAX_LOGS));
+  return entry;
+}
+
+// Shared by every portal: window.logActivity(session, "Did something")
+window.logActivity = addActivityLog;
+
+// Newest first
+export const getBroadcasts = () => read("gh_global_broadcasts", []);
+
+export function addBroadcast(message) {
+  const broadcast = {
+    id: Date.now(),
+    message,
+    date: new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+  write("gh_global_broadcasts", [broadcast, ...getBroadcasts()]);
+  return broadcast;
+}
+
+// { [lowercased identifier]: { count, lockedUntil } }
+export const getLoginAttempts = () => read("gh_login_attempts", {});
+export const saveLoginAttempts = (attempts) =>
+  write("gh_login_attempts", attempts);
+
 // Active counselors only (deactivated staff can't take new bookings)
 export const getCounselors = () =>
   getUsers().filter((u) => u.role === "guidance" && u.active !== false);

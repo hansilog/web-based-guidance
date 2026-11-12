@@ -6,7 +6,19 @@ import { renderLandingPage } from "./landing.js";
 import { renderAdminView } from "./admin.js";
 import { initGoogleAuth, handleSignOut } from "./calendar.js";
 import { hashPassword } from "./syncUtil.js";
-import { getUsers, migrateData, toDateStr } from "./store.js";
+import {
+  getUsers,
+  saveUsers,
+  saveAppointments,
+  hasCollection,
+  findUserByLogin,
+  isUsernameOrEmailTaken,
+  addUser,
+  getLoginAttempts,
+  saveLoginAttempts,
+  migrateData,
+  toDateStr,
+} from "./store.js";
 import { startReminderService } from "./reminders.js";
 import "./styles/styles.css";
 import "./styles/features.css";
@@ -17,8 +29,7 @@ emailjs.init("6_rFpZEVOh3AVEsIM");
 
 // --- UPDATED SEED USERS ---
 const seedUsers = async () => {
-  const existingUsers = localStorage.getItem("gh_users");
-  if (!existingUsers) {
+  if (!hasCollection("gh_users")) {
     const defaultStudentHash = await hashPassword("123");
     const defaultGuidanceHash = await hashPassword("123");
     const otherStudentHash = await hashPassword("pass123");
@@ -85,7 +96,7 @@ const seedUsers = async () => {
         email: "jellopancake213@gmail.com",
       },
     ];
-    localStorage.setItem("gh_users", JSON.stringify(initialUsers));
+    saveUsers(initialUsers);
   }
 };
 
@@ -100,9 +111,7 @@ function weekdayFromToday(offset) {
 }
 
 const seedAppointments = () => {
-  const existingApps = localStorage.getItem("gh_appointments");
-
-  if (!existingApps) {
+  if (!hasCollection("gh_appointments")) {
     const initialAppointments = [
       {
         id: Date.now() + 1,
@@ -154,10 +163,7 @@ const seedAppointments = () => {
       },
     ];
 
-    localStorage.setItem(
-      "gh_appointments",
-      JSON.stringify(initialAppointments),
-    );
+    saveAppointments(initialAppointments);
   }
 };
 
@@ -173,18 +179,6 @@ function handleLogout() {
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000;
 
-function readAttempts() {
-  try {
-    return JSON.parse(localStorage.getItem("gh_login_attempts")) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeAttempts(attempts) {
-  localStorage.setItem("gh_login_attempts", JSON.stringify(attempts));
-}
-
 async function handleLogin(rawIdentifier, p, showError) {
   const identifier = String(rawIdentifier || "")
     .trim()
@@ -193,7 +187,7 @@ async function handleLogin(rawIdentifier, p, showError) {
     return showError("Please enter your username/email and password.");
   }
 
-  const attempts = readAttempts();
+  const attempts = getLoginAttempts();
   const record = attempts[identifier];
   if (record && record.lockedUntil > Date.now()) {
     const mins = Math.ceil((record.lockedUntil - Date.now()) / 60000);
@@ -202,15 +196,9 @@ async function handleLogin(rawIdentifier, p, showError) {
     );
   }
 
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+  const candidate = findUserByLogin(identifier);
   const inputHash = await hashPassword(p);
-
-  const found = users.find(
-    (u) =>
-      (String(u.user).toLowerCase() === identifier ||
-        String(u.email).toLowerCase() === identifier) &&
-      u.pass === inputHash,
-  );
+  const found = candidate && candidate.pass === inputHash ? candidate : null;
 
   if (found) {
     delete attempts[identifier];
@@ -221,7 +209,7 @@ async function handleLogin(rawIdentifier, p, showError) {
       lockedUntil: count >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0,
     };
   }
-  writeAttempts(attempts);
+  saveLoginAttempts(attempts);
 
   if (found && found.active === false) {
     showError(
@@ -276,14 +264,7 @@ async function handleRegister(
     );
   }
 
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const exists = users.some(
-    (user) =>
-      String(user.user).toLowerCase() === username.toLowerCase() ||
-      String(user.email).toLowerCase() === cleanEmail,
-  );
-
-  if (exists) {
+  if (isUsernameOrEmailTaken(username, cleanEmail)) {
     return showError("Username or Email already exists!");
   }
 
@@ -304,8 +285,7 @@ async function handleRegister(
     consentAt: new Date().toISOString(),
   };
 
-  users.push(newUser);
-  localStorage.setItem("gh_users", JSON.stringify(users));
+  addUser(newUser);
 
   if (showSuccess) {
     showSuccess();

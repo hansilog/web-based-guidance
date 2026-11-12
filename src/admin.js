@@ -17,6 +17,10 @@ import {
   parseDate,
   toDateStr,
   ACTIVE_STATUSES,
+  getUserById,
+  getActivityLogs,
+  addBroadcast,
+  isUsernameOrEmailTaken,
 } from "./store.js";
 
 // The logged-in admin, used for activity logging
@@ -30,7 +34,7 @@ let adminSession = null;
  * @param {HTMLElement} container - The target inner dynamic layout slot
  */
 function renderStaffManager(container) {
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+  const users = getUsers();
   // Filter for guidance counselor accounts exclusively
   const counselors = users.filter((u) => u.role === "guidance");
 
@@ -529,28 +533,8 @@ function renderSection(target, container) {
         return;
       }
 
-      // 1. Retrieve the existing announcements array stack from storage, fallback to empty array if blank
-      const currentFeed =
-        JSON.parse(localStorage.getItem("gh_global_broadcasts")) || [];
-
-      // 2. Create the structured data entry
-      const newBroadcast = {
-        id: Date.now(), // Unique ID used for tracking DOM re-renders later
-        message: messageText,
-        date: new Date().toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-
-      // 3. Unshift places the newly written message at index [0] so it displays at the top of the feed
-      currentFeed.unshift(newBroadcast);
-
-      // 4. Commit back to localStorage (other open tabs pick it up via the storage event)
-      localStorage.setItem("gh_global_broadcasts", JSON.stringify(currentFeed));
+      // Newest first; other open tabs pick it up through the storage event
+      addBroadcast(messageText);
       window.logActivity(adminSession, "Posted a global announcement");
 
       alert("Broadcast posted successfully to all user dashboards!");
@@ -743,7 +727,7 @@ function renderOfficeSettings(container) {
 
 export function renderLogsView(container) {
   // 1. Initial Data Load
-  const allLogs = JSON.parse(localStorage.getItem("gh_activity_logs") || "[]");
+  const allLogs = getActivityLogs();
 
   // 2. Render the layout with Search Bar
   container.innerHTML = `
@@ -962,10 +946,7 @@ function setupModalHandlers() {
 
     const users = getUsers();
     const username = email.split("@")[0];
-    const taken = users.some(
-      (u) => u.id !== id && (u.email === email || u.user === username),
-    );
-    if (taken) {
+    if (isUsernameOrEmailTaken(username, email, id)) {
       alert("Another account already uses this email or username.");
       return;
     }
@@ -1038,8 +1019,7 @@ window.openAddCounselorModal = () => {
 };
 
 window.openEditCounselorModal = (id) => {
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
-  const targetUser = users.find((u) => u.id === id);
+  const targetUser = getUserById(id);
 
   if (!targetUser) return;
 
@@ -1144,8 +1124,8 @@ window.exportAppointmentsCsv = () => {
 };
 
 function getAnalytics() {
-  const apps = JSON.parse(localStorage.getItem("gh_appointments")) || [];
-  const users = JSON.parse(localStorage.getItem("gh_users")) || [];
+  const apps = getAppointments();
+  const users = getUsers();
 
   const yearBreakdown = {
     "1st Year": 0,
