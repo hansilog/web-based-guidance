@@ -21,22 +21,18 @@ what's written here.
 
 In **Authentication**:
 
-1. **URL Configuration → Site URL**: your app's address, e.g.
-   `https://<your-github-name>.github.io/<repo>/` (use `http://localhost:8080` while testing).
-2. **Email Templates → Reset Password**: the app asks for a code, so the email must
-   contain it. Replace the body with:
+1. **URL Configuration**: set **Site URL** to where the app runs (`http://localhost:8080` while
+   testing) and add your deployed address (e.g. `https://<user>.github.io/<repo>/**`) to
+   **Redirect URLs**. Confirmation and password-reset links only open allowed addresses.
+2. **Sign In / Providers → Email**: minimum password length 8 (the app requires 8).
+3. **Recommended: SMTP settings.** Supabase's built-in sender is for testing: on the free plan
+   it sends only about **2 emails per hour** for the whole project (sign-up confirmations and
+   reset links count together). Add your own sender (for example a Gmail account with an app
+   password) before inviting real users.
 
-   ```html
-   <h2>Reset your Granby Gateway password</h2>
-   <p>Your code is: <strong>{{ .Token }}</strong></p>
-   <p>If you didn't ask for this, you can ignore this email.</p>
-   ```
-
-3. **Email Templates → Reauthentication** (used when a counselor changes their password):
-   check it shows `{{ .Token }}` (it does by default).
-4. **Recommended: SMTP settings.** Supabase's built-in sender only allows a few emails per
-   hour and is meant for testing. Add your own sender (for example a Gmail account with an
-   app password) before real use.
+Password resets use Supabase's default email, which contains a link. The link opens the app
+on a "Choose a new password" screen, on any device. (Free projects can't edit email templates
+without their own SMTP sender, so the app doesn't rely on custom templates.)
 
 "Confirm email" is on by default: new students click a link in their email before they
 can sign in. Leave it on.
@@ -75,8 +71,8 @@ private. For `npm run deploy`, build on a computer that has the `.env` file.
 | ----------------------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
 | Data                                      | Only in one browser                      | Shared by everyone, live                                       |
 | Passwords                                 | Hashed in the browser                    | Supabase Auth (bcrypt), rate-limited                           |
-| Password reset                            | EmailJS code                             | Supabase email code                                            |
-| Admin "Reset password"                    | Shows a temporary password               | Emails the student a reset code                                |
+| Password reset                            | EmailJS code                             | Supabase email link                                            |
+| Admin "Reset password"                    | Shows a temporary password               | Emails the student a reset link                                |
 | Double-booking                            | Checked in the browser                   | Blocked by the database                                        |
 | Booking rules (hours, holidays, days off) | Browser only                             | Also enforced by the database                                  |
 | Privacy                                   | Anyone with DevTools can read everything | Students only get their own records; case notes are staff-only |

@@ -1,7 +1,7 @@
 import emailjs from "@emailjs/browser";
 import { hashPassword } from "./syncUtil.js";
 import { findUserByEmail, updateUser } from "./store.js";
-import { isRemote, sendResetCode, finishReset } from "./remote.js";
+import { isRemote, sendResetLink, setNewPassword } from "./remote.js";
 import "./styles/auth.css";
 
 // Initialize EmailJS
@@ -27,7 +27,7 @@ export function renderLoginPage(
 
     if (isForgotFlow) {
       subtitle = "Reset your password";
-      authBtnText = "Send OTP";
+      authBtnText = isRemote ? "Send Reset Link" : "Send OTP";
     } else if (isRegistering) {
       subtitle = "Join our school community";
       authBtnText = "Create Student Account";
@@ -193,42 +193,17 @@ export function renderLoginPage(
           .value.trim()
           .toLowerCase();
 
-        // Supabase emails and checks the code (expiry and attempt limits included)
+        // Supabase emails a reset link; clicking it brings the user back to
+        // the "Choose a new password" screen (renderSetNewPassword below)
         if (isRemote) {
-          if (!generatedOTP) {
-            if (!emailVal) return showError("Please enter your email.");
-            e.target.disabled = true;
-            const problem = await sendResetCode(emailVal);
-            e.target.disabled = false;
-            if (problem) return showError(problem);
-            generatedOTP = "sent";
-            document.getElementById("otpSection").classList.remove("hidden");
-            document.getElementById("resetEmail").disabled = true;
-            e.target.innerText = "Verify & Reset";
-            return showError(
-              "If that email is registered, a 6-digit code is on its way. Check your inbox and spam folder.",
-            );
-          }
-          const code = document.getElementById("otpInput").value.trim();
-          const newPass = document.getElementById("newPass").value;
-          if (!/^\d{6,10}$/.test(code)) {
-            return showError("Enter the code from the email.");
-          }
-          if (
-            newPass.length < 8 ||
-            !/[A-Za-z]/.test(newPass) ||
-            !/\d/.test(newPass)
-          ) {
-            return showError(
-              "New password must be at least 8 characters and include a letter and a number.",
-            );
-          }
+          if (!emailVal) return showError("Please enter your email.");
           e.target.disabled = true;
-          const problem = await finishReset(emailVal, code, newPass);
+          const problem = await sendResetLink(emailVal);
           e.target.disabled = false;
           if (problem) return showError(problem);
-          generatedOTP = null;
-          alert("Password updated! You can now sign in.");
+          alert(
+            "If that email is registered, a password reset link is on its way. Open it on this or any device (check your spam folder too).",
+          );
           isForgotFlow = false;
           render();
           return null;
@@ -363,5 +338,59 @@ export function renderLoginPage(
         sectionSelect.innerHTML += `<option value="${sectionValue}">Section ${sectionValue}</option>`;
       });
     }
+  };
+}
+
+// Shown after opening a password reset link from the email (Supabase mode)
+export function renderSetNewPassword(root, onDone) {
+  root.innerHTML = `
+    <div class="auth-container">
+      <div class="auth-card glass-card">
+        <div class="brand-section">
+          <h1><i class="material-icons">assignment_ind</i> Granby Gateway</h1>
+          <p>Choose a new password</p>
+        </div>
+        <div id="authError" class="error-banner hidden"></div>
+        <form class="form-group" id="newPassForm">
+          <div class="input-wrapper plain password-wrapper">
+            <input type="password" id="newPassword" placeholder="New password" autocomplete="new-password" required>
+          </div>
+          <div class="input-wrapper plain password-wrapper">
+            <input type="password" id="newPasswordAgain" placeholder="Type it again" autocomplete="new-password" required>
+          </div>
+          <button type="submit" id="savePassBtn" class="primary-btn">Save New Password</button>
+        </form>
+      </div>
+    </div>
+  `;
+  const form = root.querySelector("#newPassForm");
+  const showError = (msg) => {
+    const banner = root.querySelector("#authError");
+    banner.innerText = msg;
+    banner.classList.remove("hidden");
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const pass = root.querySelector("#newPassword").value;
+    if (pass.length < 8 || !/[A-Za-z]/.test(pass) || !/\d/.test(pass)) {
+      showError(
+        "Password must be at least 8 characters and include a letter and a number.",
+      );
+      return;
+    }
+    if (pass !== root.querySelector("#newPasswordAgain").value) {
+      showError("The two passwords don't match.");
+      return;
+    }
+    const btn = root.querySelector("#savePassBtn");
+    btn.disabled = true;
+    const problem = await setNewPassword(pass);
+    btn.disabled = false;
+    if (problem) {
+      showError(problem);
+      return;
+    }
+    alert("Password updated! You can now sign in with it.");
+    onDone();
   };
 }

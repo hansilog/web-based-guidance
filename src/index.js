@@ -1,5 +1,5 @@
 import emailjs from "@emailjs/browser";
-import { renderLoginPage } from "./auth.js";
+import { renderLoginPage, renderSetNewPassword } from "./auth.js";
 import { renderStudentView } from "./student.js";
 import { renderGuidanceView } from "./guidance.js";
 import { renderLandingPage } from "./landing.js";
@@ -27,6 +27,7 @@ import {
   remoteSignIn,
   remoteSignUp,
   remoteSignOut,
+  isPasswordRecovery,
 } from "./remote.js";
 import "./styles/styles.css";
 import "./styles/features.css";
@@ -419,6 +420,15 @@ function initApp() {
 // System Startup Lifecycle wrapper
 const initializeSystemSequence = async () => {
   if (isRemote) {
+    // Opened a password reset link: ask for the new password, not the portal
+    if (await isPasswordRecovery().catch(() => false)) {
+      const root = document.getElementById("app");
+      renderSetNewPassword(root, () => {
+        sessionStorage.setItem("gh_entered", "true");
+        renderLoginPage(root, handleLogin, handleRegister);
+      });
+      return;
+    }
     // Signed in from an earlier visit? Load what this account may see first.
     const profile = await restoreSession().catch(() => null);
     if (profile) {

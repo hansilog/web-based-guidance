@@ -894,10 +894,10 @@ window.resetStudentPassword = async (id) => {
   const student = users.find((u) => u.id === id);
   if (!student) return;
   if (isRemote) {
-    // With Supabase, admins never see or set passwords: the student gets a code
+    // With Supabase, admins never see or set passwords: the student gets a link
     if (
       !window.confirm(
-        `Email ${student.name} a password reset code at ${student.email}?`,
+        `Email ${student.name} a password reset link at ${student.email}?`,
       )
     )
       return;
@@ -908,7 +908,7 @@ window.resetStudentPassword = async (id) => {
     }
     window.logActivity(adminSession, `Sent password reset to ${student.name}`);
     alert(
-      `Reset code sent. ${student.name} can enter it under "Forgot Password?" on the sign-in page.`,
+      `Reset link sent. ${student.name} opens it from their email and chooses a new password.`,
     );
     return;
   }

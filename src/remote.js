@@ -23,7 +23,11 @@ const SUPABASE_KEY =
 
 export const isRemote = Boolean(SUPABASE_URL && SUPABASE_KEY);
 export const supabase = isRemote
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+      // Links in emails (reset, confirm) must work on any device; PKCE would
+      // only accept them in the browser that asked
+      auth: { flowType: "implicit" },
+    })
   : null;
 
 // --- 1. COLLECTIONS: app shape <-> table columns ---
@@ -646,28 +650,49 @@ export async function remoteSignOut() {
   await supabase.auth.signOut();
 }
 
-// Password reset with a 6-digit code. The Supabase "Reset Password" email
-// template must include {{ .Token }} (see supabase/README.md).
-export async function sendResetCode(email) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+// --- Password reset by email link ---
+// Free Supabase projects can't edit email templates without their own SMTP
+// sender, and the default reset email contains a link. The link brings the
+// user back here signed in for recovery; the app then asks for a new password.
+
+const appUrl = () => window.location.origin + window.location.pathname;
+
+// Seen before supabase-js tidies the URL: did we arrive from a reset link?
+let recoveryFromLink =
+  isRemote &&
+  typeof window !== "undefined" &&
+  /type=recovery/.test(window.location.hash + window.location.search);
+
+if (isRemote) {
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") recoveryFromLink = true;
+  });
+}
+
+// Resolves once supabase-js has read any link in the URL
+export async function isPasswordRecovery() {
+  await supabase.auth.getSession();
+  return recoveryFromLink;
+}
+
+export async function sendResetLink(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: appUrl(),
+  });
   if (error?.status === 429) {
-    return "Too many requests. Please wait a minute before asking for another code.";
+    return "Too many emails were sent recently. Please wait a while and try again.";
   }
   return error ? OFFLINE : null;
 }
 
-export async function finishReset(email, code, newPassword) {
-  const { error } = await supabase.auth.verifyOtp({
-    email,
-    token: code,
-    type: "recovery",
-  });
-  if (error) return "Invalid or expired code. Please request a new one.";
-  const { error: updateError } = await supabase.auth.updateUser({
-    password: newPassword,
-  });
+export async function setNewPassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return error.message;
+  recoveryFromLink = false;
   await supabase.auth.signOut();
-  return updateError ? updateError.message : null;
+  // Drop the token from the address bar
+  window.history.replaceState(null, "", appUrl());
+  return null;
 }
 
 // Signed-in password change: Supabase emails a code to confirm it's really you
@@ -723,7 +748,7 @@ export async function createCounselor({ name, email, password, specialty }) {
 
 // Admin: let someone reset their own password (admins can't see or set it)
 export async function sendResetEmail(email) {
-  return sendResetCode(email);
+  return sendResetLink(email);
 }
 
 // Public status check for an anonymous concern
