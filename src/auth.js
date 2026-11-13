@@ -50,7 +50,6 @@ export function renderLoginPage(
                   ? `
                 <div class="input-group-row">
                     <div class="input-wrapper plain"><input type="text" id="regFirst" placeholder="First Name" required></div>
-                    <div class="input-wrapper plain"><input type="text" id="regMiddle" placeholder="Middle Name (Optional)"></div>
                     <div class="input-wrapper plain"><input type="text" id="regLast" placeholder="Last Name" required></div>
                 </div>
                 <div class="input-wrapper plain"><input type="email" id="regEmail" placeholder="Email Address" required></div>
@@ -274,11 +273,8 @@ export function renderLoginPage(
         }
       } else if (isRegistering) {
         const first = document.getElementById("regFirst").value.trim();
-        const middle = document.getElementById("regMiddle").value.trim();
         const last = document.getElementById("regLast").value.trim();
-        const fullName = [first, middle, last]
-          .filter((part) => part !== "")
-          .join(" ");
+        const fullName = `${first} ${last}`.trim();
         const required = [
           "regFirst",
           "regLast",
