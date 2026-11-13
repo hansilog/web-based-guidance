@@ -1,5 +1,6 @@
 import emailjs from "@emailjs/browser";
 import { renderLoginPage, renderSetNewPassword } from "./auth.js";
+import { syncPortalTab, showTabFromUrl } from "./history.js";
 import { renderStudentView } from "./student.js";
 import { renderGuidanceView } from "./guidance.js";
 import { renderLandingPage } from "./landing.js";
@@ -381,6 +382,22 @@ function loadValidSession() {
 }
 
 // --- ROUTER ---
+
+// Address-bar markers for the screens before sign-in (#login), so the
+// browser's Back and Forward move between the landing page and sign-in
+function markScreen(hash) {
+  const url = window.location.pathname + window.location.search + hash;
+  if (window.location.hash !== hash) window.history.replaceState(null, "", url);
+}
+
+function showLogin(root, startAsRegister) {
+  sessionStorage.setItem("gh_entered", "true");
+  if (window.location.hash !== "#login") {
+    window.history.pushState(null, "", "#login");
+  }
+  renderLoginPage(root, handleLogin, handleRegister, startAsRegister);
+}
+
 function initApp() {
   const root = document.getElementById("app");
   const session = loadValidSession();
@@ -389,34 +406,50 @@ function initApp() {
   // 1. If we have a session, show the appropriate view
   if (session) {
     startIdleTimer(session);
-    if (session.role === "admin")
-      return renderAdminView(root, session, handleLogout);
-    if (session.role === "guidance")
-      return renderGuidanceView(root, session, handleLogout);
-    return renderStudentView(root, session, handleLogout);
+    if (session.role === "admin") renderAdminView(root, session, handleLogout);
+    else if (session.role === "guidance") {
+      renderGuidanceView(root, session, handleLogout);
+    } else renderStudentView(root, session, handleLogout);
+    syncPortalTab();
+    return;
   }
+
+  // The landing page and portals use their own click handlers
+  root.onclick = null;
+  root.onchange = null;
 
   // 2. If no session, check if they have "Entered" (clicked Get Started or Sign In)
   if (hasEntered) {
-    // We pass handleLogin and handleRegister from your entry file scope
-    return renderLoginPage(root, handleLogin, handleRegister);
+    markScreen("#login");
+    renderLoginPage(root, handleLogin, handleRegister);
+    return;
   }
 
   // 3. Otherwise, show the landing page
+  markScreen("");
   renderLandingPage(
     root,
-    () => {
-      // "Get Started"
-      sessionStorage.setItem("gh_entered", "true");
-      renderLoginPage(root, handleLogin, handleRegister, true);
-    },
-    () => {
-      // "Sign In"
-      sessionStorage.setItem("gh_entered", "true");
-      renderLoginPage(root, handleLogin, handleRegister, false);
-    },
+    () => showLogin(root, true), // "Get Started"
+    () => showLogin(root, false), // "Sign In"
   );
 }
+
+// Browser Back / Forward
+window.addEventListener("popstate", () => {
+  if (sessionStorage.getItem("gh_session")) {
+    // Signed in: move between tabs; going back past the first tab keeps
+    // you in the portal instead of showing the sign-in page again
+    if (!showTabFromUrl()) syncPortalTab();
+    return;
+  }
+  const wantsLogin = window.location.hash === "#login";
+  const onLogin = Boolean(document.getElementById("authCard"));
+  if (wantsLogin === onLogin) return;
+  if (wantsLogin) sessionStorage.setItem("gh_entered", "true");
+  else sessionStorage.removeItem("gh_entered");
+  initApp();
+});
+
 // System Startup Lifecycle wrapper
 const initializeSystemSequence = async () => {
   if (isRemote) {
