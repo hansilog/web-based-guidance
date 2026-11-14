@@ -1,0 +1,235 @@
+/* =========================================================
+   student-theme.css
+   Student portal on top of theme.css: quiet paper background,
+   thin-bordered cards, one counter strip, sentence-case labels.
+   ========================================================= */
+
+body.student-portal .student-container {
+  background: var(--c-paper);
+}
+
+/* The sidebar already says "Student Portal"; no badge above every title */
+body.student-portal .dashboard-hero .badge {
+  display: none;
+}
+body.student-portal .dashboard-hero {
+  margin-bottom: 24px;
+}
+body.student-portal .dashboard-hero h1 {
+  margin: 0 0 6px;
+  color: var(--c-ink);
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+body.student-portal .dashboard-hero p {
+  margin: 0;
+  color: var(--c-muted);
+  font-size: 0.98rem;
+}
+body.student-portal .dashboard-hero p strong {
+  color: var(--c-ink);
+}
+
+/* Titles start right under the top bar, level with the right-hand column */
+body.student-portal .dashboard-hero {
+  padding-top: 0 !important;
+}
+body.student-portal .right-sidebar {
+  padding-top: 0 !important;
+}
+body.student-portal .portal-topbar {
+  margin-bottom: 12px;
+}
+
+/* "Ask Granby AI" stands apart from the page links */
+body.student-portal .sidebar .nav-item.ai-chat-trigger {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff !important;
+}
+body.student-portal .sidebar .nav-item.ai-chat-trigger i {
+  color: #8fb4ea;
+}
+
+/* --- Counter strip --- */
+body.student-portal .stats-grid-horizontal {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-line);
+  margin-bottom: 24px;
+}
+body.student-portal .stat-box {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 16px 20px;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+body.student-portal .stat-box:hover {
+  transform: none;
+  box-shadow: none;
+}
+body.student-portal .stat-box .label {
+  color: var(--c-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body.student-portal .stat-box .value {
+  color: var(--c-ink) !important;
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+/* --- Cards --- */
+body.student-portal .table-card,
+body.student-portal .settings-card,
+body.student-portal .calendar-card,
+body.student-portal .waitlist-card {
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+body.student-portal .calendar-card {
+  padding: 16px 18px;
+}
+body.student-portal .table-card h3,
+body.student-portal .settings-card h2,
+body.student-portal .calendar-card summary,
+body.student-portal .waitlist-card h3 {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+body.student-portal .view-all-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body.student-portal .view-all-btn:hover {
+  background: var(--c-sky);
+}
+body.student-portal .recent-table .date-cell small,
+body.student-portal .row-sub {
+  color: var(--c-muted);
+}
+body.student-portal .row-action {
+  border-color: var(--c-line);
+  background: #fff;
+  color: var(--c-blue);
+}
+body.student-portal .row-action:hover {
+  background: var(--c-sky);
+}
+body.student-portal .row-action.danger {
+  color: var(--c-red);
+}
+body.student-portal .row-action.danger:hover {
+  background: #fdf3f2;
+}
+
+/* --- Right-hand column --- */
+body.student-portal .next-up-card {
+  border-radius: 12px;
+  background: var(--c-ink);
+  box-shadow: none;
+}
+body.student-portal .next-up-card .card-tag {
+  color: #a9bedb;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body.student-portal .support-card {
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+}
+body.student-portal .support-card h4 {
+  margin: 0 0 4px;
+  color: var(--c-ink);
+}
+body.student-portal .day-num.today,
+body.student-portal .day-num.has-event {
+  background: var(--c-blue);
+}
+
+/* --- Booking form and settings --- */
+body.student-portal .form-group label,
+body.student-portal .settings-form label {
+  color: var(--c-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body.student-portal .form-group :is(input, select, textarea),
+body.student-portal .settings-form input {
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+}
+body.student-portal .form-group :is(input, select, textarea):focus,
+body.student-portal .settings-form input:focus {
+  border-color: var(--c-blue);
+  box-shadow: 0 0 0 3px var(--c-sky);
+}
+body.student-portal
+  .styled-form
+  .form-group
+  :is(input.date-field, input.date-field:valid, input.date-field:invalid) {
+  border: 1px solid var(--c-line);
+  background: #fff;
+}
+body.student-portal .primary-btn {
+  border-radius: 8px;
+  background: var(--c-blue);
+}
+body.student-portal .primary-btn:hover {
+  background: var(--c-blue-dark);
+}
+body.student-portal .slot-btn.selected {
+  border-color: var(--c-blue);
+  background: var(--c-blue);
+}
+
+/* --- History --- */
+body.student-portal .history-item {
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  box-shadow: none;
+}
+body.student-portal .history-item:hover {
+  transform: none;
+  border-color: #c3d1e3;
+  box-shadow: none;
+}
+body.student-portal .history-icon {
+  background: var(--c-sky);
+  color: var(--c-blue);
+}
+
+/* --- Top bar on small screens --- */
+body.student-portal .hamburger-btn,
+body.student-portal .bell-btn {
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+  color: var(--c-ink);
+}

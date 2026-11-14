@@ -384,7 +384,7 @@ export function renderRightSidebar(
   return `
         <aside class="right-sidebar">
             <div class="next-up-card">
-                <div class="card-tag">NEXT SESSION</div>
+                <div class="card-tag">Next session</div>
                 ${
                   nextApp
                     ? `
@@ -450,7 +450,7 @@ export function renderDashboard(session = {}) {
             <div class="dashboard-main-col">
                 <div class="dashboard-hero" style="padding-top: 40px;">
                     <span class="badge">Student Portal</span>
-                    <h1>Welcome Back, ${escapeHtml(session.name || "Student")}!</h1>
+                    <h1>Welcome back, ${escapeHtml(session.name || "Student")}</h1>
                     <p>You have <strong>${pendingCount}</strong> pending request${pendingCount === 1 ? "" : "s"}${
                       toRate > 0
                         ? ` and <strong>${toRate}</strong> session${toRate === 1 ? "" : "s"} to rate`
@@ -1569,11 +1569,18 @@ window.handleStudentInlineSync = async (btn) => {
 // --- MAIN RENDERER ---
 
 export function renderStudentView(root, session, onLogout) {
+  document.body.classList.add("student-portal");
   root.innerHTML = `
     <div class="student-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2><i class="material-icons">school</i> Granby Gateway</h2>
+                <div class="portal-brand">
+                    <i class="material-icons" aria-hidden="true">school</i>
+                    <div class="portal-brand-text">
+                        <span class="portal-brand-name">Granby Gateway</span>
+                        <span class="portal-brand-role">Student Portal</span>
+                    </div>
+                </div>
             </div>
             <nav id="student-nav">
                 <button class="nav-item active" data-target="dashboard">

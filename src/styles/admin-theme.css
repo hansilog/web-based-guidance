@@ -1,0 +1,222 @@
+/* =========================================================
+   admin-theme.css
+   Admin portal on top of theme.css. Several admin screens use inline
+   styles, so a few rules here need !important to win over them.
+   ========================================================= */
+
+body.admin-portal .admin-container {
+  background: var(--c-paper);
+}
+
+/* --- Cards and page titles --- */
+body.admin-portal .admin-card {
+  padding: 22px 24px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+body.admin-portal .admin-card + .admin-card {
+  margin-top: 20px;
+}
+body.admin-portal .admin-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink) !important;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+body.admin-portal .admin-card h2 .material-icons,
+body.admin-portal .report-section h3 .material-icons {
+  color: var(--c-blue);
+}
+body.admin-portal .admin-card .subtitle {
+  color: var(--c-muted) !important;
+  font-size: 0.9rem !important;
+}
+
+/* --- Buttons --- */
+body.admin-portal .primary-btn,
+body.admin-portal .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px !important;
+  border: 1px solid var(--c-blue) !important;
+  border-radius: 8px !important;
+  background: var(--c-blue) !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+}
+body.admin-portal .primary-btn:hover,
+body.admin-portal .btn-primary:hover {
+  background: var(--c-blue-dark) !important;
+}
+body.admin-portal .btn-secondary,
+body.admin-portal .roster-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px !important;
+  border: 1px solid var(--c-line) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  color: var(--c-ink) !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+}
+body.admin-portal .btn-secondary:hover,
+body.admin-portal .roster-btn:hover {
+  background: var(--c-sky) !important;
+}
+body.admin-portal .btn-danger,
+body.admin-portal .roster-btn.danger {
+  border: 1px solid var(--c-line) !important;
+  background: #fff !important;
+  color: var(--c-red) !important;
+}
+body.admin-portal .btn-danger:hover,
+body.admin-portal .roster-btn.danger:hover {
+  background: #fdf3f2 !important;
+}
+body.admin-portal :is(.btn-primary, .btn-secondary) .material-icons {
+  font-size: 18px;
+}
+
+/* --- Tables --- */
+body.admin-portal .admin-table td {
+  vertical-align: middle;
+}
+body.admin-portal .admin-table strong {
+  color: var(--c-ink) !important;
+}
+/* Specialty and course chips */
+body.admin-portal td[data-label="Specialty Focus Area"] > span,
+body.admin-portal td[data-label="Course"] > span {
+  background: var(--c-sky) !important;
+  color: var(--c-ink) !important;
+  font-weight: 600 !important;
+}
+body.admin-portal :is(#logSearch, #rosterSearch, .admin-input) {
+  border: 1px solid var(--c-line) !important;
+  border-radius: 8px !important;
+  background: #fff;
+  font-size: 0.88rem;
+}
+body.admin-portal :is(#logSearch, #rosterSearch, .admin-input):focus {
+  border-color: var(--c-blue) !important;
+  outline: 2px solid var(--c-sky);
+}
+
+/* --- Reports: counter strip and charts --- */
+body.admin-portal .reports-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.admin-portal .report-actions {
+  display: flex;
+  gap: 8px;
+}
+body.admin-portal .stats-grid {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-line);
+}
+body.admin-portal .stat-item {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  text-align: left;
+}
+body.admin-portal .stat-label {
+  color: var(--c-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+body.admin-portal .stat-value,
+body.admin-portal .stat-value:is(.warning, .info, .success) {
+  color: var(--c-ink);
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+body.admin-portal .report-section {
+  padding: 18px 20px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+body.admin-portal .report-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink);
+  font-size: 1rem;
+  font-weight: 700;
+}
+body.admin-portal .trend-highlight {
+  border: 1px solid var(--c-line-soft);
+  background: var(--c-paper) !important;
+}
+body.admin-portal .trend-highlight > span:first-child {
+  color: var(--c-ink) !important;
+}
+
+/* Chart colors: blues for categories, status colors only for statuses */
+body.admin-portal .bg-blue {
+  background: var(--c-blue);
+}
+body.admin-portal .bg-green {
+  background: #2f855a;
+}
+body.admin-portal .bg-orange {
+  background: #d69e2e;
+}
+body.admin-portal .bg-red {
+  background: #c53030;
+}
+body.admin-portal .bg-purple {
+  background: var(--c-ink-soft);
+}
+body.admin-portal .bg-cyan {
+  background: #6b9bd8;
+}
+body.admin-portal .bg-indigo {
+  background: var(--c-ink);
+}
+
+/* --- Add / edit counselor dialog (inline-styled) --- */
+body.admin-portal #counselorModal .modal-card {
+  border-radius: 14px !important;
+  box-shadow: 0 20px 40px -20px rgba(22, 50, 92, 0.35) !important;
+}
+body.admin-portal #modalTitle {
+  color: var(--c-ink) !important;
+  font-weight: 800;
+}
+body.admin-portal #counselorModal :is(input, select) {
+  border-color: var(--c-line) !important;
+  border-radius: 8px !important;
+}
+body.admin-portal #saveCounselorBtn {
+  background: var(--c-blue) !important;
+  box-shadow: none !important;
+}

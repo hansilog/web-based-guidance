@@ -403,12 +403,18 @@ window.printReport = (type, stats = null) => {
   win.close();
 };
 export function renderAdminView(root, session, onLogout) {
+  document.body.classList.add("admin-portal");
   root.innerHTML = `
     <div class="admin-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2><i class="material-icons">security</i> Admin Portal</h2>
-                <p>System Control Center</p>
+                <div class="portal-brand">
+                    <i class="material-icons" aria-hidden="true">admin_panel_settings</i>
+                    <div class="portal-brand-text">
+                        <span class="portal-brand-name">Granby Gateway</span>
+                        <span class="portal-brand-role">Administrator</span>
+                    </div>
+                </div>
             </div>
             <nav id="admin-nav">
 

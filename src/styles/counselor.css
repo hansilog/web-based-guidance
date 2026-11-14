@@ -7,41 +7,7 @@
    different face).
    ========================================================= */
 
-body.counselor-portal {
-  --c-ink: #16325c;
-  --c-ink-soft: #234372;
-  --c-blue: #1f5fbf;
-  --c-blue-dark: #194f9f;
-  --c-sky: #e8f0fb;
-  --c-paper: #f5f7fa;
-  --c-line: #d8e0ea;
-  --c-line-soft: #edf1f6;
-  --c-text: #1e2a3b;
-  --c-muted: #5b6b80;
-  --c-amber: #8a5300;
-  --c-red: #b42318;
-  --c-green: #1f6b3f;
-  --c-ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* Headings use the same family, heavier */
-  --c-heading: var(--c-ui);
-  background: var(--c-paper);
-}
-
-body.counselor-portal .guidance-portal,
-body.counselor-portal .custom-modal-overlay {
-  font-family: var(--c-ui);
-  color: var(--c-text);
-}
-body.counselor-portal .guidance-portal button,
-body.counselor-portal .guidance-portal input,
-body.counselor-portal .guidance-portal select,
-body.counselor-portal .guidance-portal textarea,
-body.counselor-portal .custom-modal-overlay button,
-body.counselor-portal .custom-modal-overlay input,
-body.counselor-portal .custom-modal-overlay select,
-body.counselor-portal .custom-modal-overlay textarea {
-  font-family: inherit;
-}
+/* Colors and fonts come from theme.css (shared by all portals) */
 
 .guidance-portal {
   background: var(--c-paper);
@@ -401,45 +367,6 @@ body.counselor-portal .custom-modal-overlay textarea {
   box-shadow: inset 3px 0 0 var(--c-red);
 }
 
-/* Status: sentence case, one shape */
-body.counselor-portal .status-pill {
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-decoration: none;
-  text-transform: none;
-}
-body.counselor-portal .status-pill.pending {
-  background: #fff4db;
-  color: var(--c-amber);
-}
-body.counselor-portal .status-pill.approved {
-  background: #e3f4ea;
-  color: var(--c-green);
-}
-body.counselor-portal .status-pill.completed {
-  background: var(--c-sky);
-  color: var(--c-ink);
-}
-body.counselor-portal .status-pill.rejected,
-body.counselor-portal .status-pill.no-show {
-  background: #fde8e7;
-  color: var(--c-red);
-}
-body.counselor-portal .status-pill.cancelled {
-  background: #eef1f5;
-  color: var(--c-muted);
-}
-body.counselor-portal .urgent-tag {
-  background: #fde8e7;
-  color: var(--c-red);
-  font-size: 0.72rem;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 /* Row actions: the next step is a solid button, the alternative is an outline */
 .guidance-portal .act-btn {
   padding: 6px 11px;
@@ -564,29 +491,6 @@ body.counselor-portal .urgent-tag {
   border-radius: 8px;
   background: #fff;
   color: var(--c-ink);
-}
-
-/* --- Dialogs opened from the counselor portal --- */
-body.counselor-portal .app-modal-card {
-  border: 1px solid var(--c-line);
-  border-radius: 14px;
-}
-body.counselor-portal .custom-modal-header h3 {
-  color: var(--c-ink);
-  font-family: var(--c-heading);
-  font-weight: 600;
-}
-body.counselor-portal .modal-icon {
-  color: var(--c-blue);
-}
-body.counselor-portal .modal-icon.danger {
-  color: var(--c-red);
-}
-body.counselor-portal .modal-btn.confirm-btn {
-  background: var(--c-blue);
-}
-body.counselor-portal .modal-btn.confirm-btn:hover {
-  background: var(--c-blue-dark);
 }
 
 /* --- Settings --- */

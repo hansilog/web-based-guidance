@@ -1,0 +1,253 @@
+/* =========================================================
+   theme.css
+   Shared look of the three signed-in portals. Each portal adds a class
+   to <body> (student-portal, counselor-portal, admin-portal), so the
+   landing and sign-in pages are not affected.
+   Portal-specific rules: student-theme.css, counselor.css, admin-theme.css.
+   ========================================================= */
+
+body.student-portal,
+body.counselor-portal,
+body.admin-portal {
+  --c-ink: #16325c;
+  --c-ink-soft: #234372;
+  --c-blue: #1f5fbf;
+  --c-blue-dark: #194f9f;
+  --c-sky: #e8f0fb;
+  --c-paper: #f5f7fa;
+  --c-line: #d8e0ea;
+  --c-line-soft: #edf1f6;
+  --c-text: #1e2a3b;
+  --c-muted: #5b6b80;
+  --c-amber: #8a5300;
+  --c-red: #b42318;
+  --c-green: #1f6b3f;
+  --c-ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --c-heading: var(--c-ui);
+  background: var(--c-paper);
+  color: var(--c-text);
+  font-family: var(--c-ui);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  :is(h1, h2, h3, h4) {
+  font-family: var(--c-heading);
+}
+
+/* --- Navy sidebar (student and admin; the counselor's is in counselor.css) --- */
+:is(body.student-portal, body.admin-portal) .sidebar {
+  background: var(--c-ink);
+  border-right: 0;
+  padding: 24px 14px;
+}
+:is(body.student-portal, body.admin-portal) .sidebar-header {
+  margin-bottom: 22px;
+  padding: 0 8px;
+}
+.portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.portal-brand > .material-icons {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 20px;
+}
+.portal-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.portal-brand-name {
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.portal-brand-role {
+  color: #a9bedb;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item {
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #d3dfef;
+  font-size: 0.93rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item i {
+  color: #9fb5d3;
+  font-size: 20px;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item.active {
+  background: #fff;
+  color: var(--c-ink);
+  font-weight: 600;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item.active i {
+  color: var(--c-blue);
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item:focus-visible {
+  outline: 2px solid #8fb4ea;
+  outline-offset: 2px;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item.logout,
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item.logout i {
+  color: #f4b4b4 !important;
+}
+:is(body.student-portal, body.admin-portal) .sidebar .nav-item.logout:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* --- Status pills: sentence case, one shape --- */
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .status-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: none;
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .status-pill.pending {
+  background: #fff4db;
+  color: var(--c-amber);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .status-pill.approved {
+  background: #e3f4ea;
+  color: var(--c-green);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .status-pill.completed {
+  background: var(--c-sky);
+  color: var(--c-ink);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  :is(.status-pill.rejected, .status-pill.no-show) {
+  background: #fde8e7;
+  color: var(--c-red);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .status-pill.cancelled {
+  background: #eef1f5;
+  color: var(--c-muted);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal) .urgent-tag {
+  background: #fde8e7;
+  color: var(--c-red);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --- Tables: sentence-case headers on a light band --- */
+:is(body.student-portal, body.admin-portal) table th {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+:is(body.student-portal, body.admin-portal) table td {
+  border-bottom: 1px solid var(--c-line-soft);
+  color: var(--c-text);
+}
+
+/* --- Dialogs (added to <body>) --- */
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .app-modal-card {
+  border: 1px solid var(--c-line);
+  border-radius: 14px;
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .custom-modal-header
+  h3 {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal) .modal-icon {
+  color: var(--c-blue);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .modal-icon.danger {
+  color: var(--c-red);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .modal-btn.confirm-btn {
+  background: var(--c-blue);
+}
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .modal-btn.confirm-btn:hover {
+  background: var(--c-blue-dark);
+}
+
+/* --- Announcement banner --- */
+:is(body.student-portal, body.counselor-portal, body.admin-portal)
+  .broadcast-banner {
+  border: 1px solid #f2d58c !important;
+  border-left: 4px solid #d69e2e !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+/* --- Phones: guidance.css turns every sidebar into a white top bar --- */
+@media screen and (max-width: 768px) {
+  :is(body.student-portal, body.admin-portal) .sidebar {
+    background: var(--c-ink) !important;
+    padding: 6px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :is(body.student-portal, body.admin-portal) .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+  :is(body.student-portal, body.admin-portal) .sidebar nav,
+  body.admin-portal #admin-nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 2px;
+    width: 100%;
+  }
+  :is(body.student-portal, body.admin-portal) .sidebar .nav-item {
+    flex-shrink: 0;
+    width: auto;
+    margin: 0;
+    padding: 6px 10px !important;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  body.student-portal .sidebar .nav-item.ai-chat-trigger {
+    margin-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(body.student-portal, body.counselor-portal, body.admin-portal) * {
+    transition: none !important;
+  }
+}

@@ -1,6 +1,5 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
-import "./styles/counselor.css";
 import {
   listenForRealTimeUpdates,
   renderBroadcastBanner,

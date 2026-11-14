@@ -32,6 +32,11 @@ import {
 } from "./remote.js";
 import "./styles/styles.css";
 import "./styles/features.css";
+// Portal themes load last so they win over the shared styles above
+import "./styles/theme.css";
+import "./styles/student-theme.css";
+import "./styles/counselor.css";
+import "./styles/admin-theme.css";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 
