@@ -1,0 +1,438 @@
+/* =========================================================
+   insights.css: counselor Insights tab
+   Thin marks (<= 24px columns, 4px rounded data ends, square at the
+   baseline), hairline solid grid, 2px surface gaps, text in text colors.
+   ========================================================= */
+
+.ins-page {
+  position: relative;
+}
+.ins-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ins-head h2 {
+  margin: 0;
+  color: var(--c-ink);
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.ins-sub {
+  margin: 2px 0 0;
+  color: var(--c-muted);
+  font-size: 0.88rem;
+}
+
+/* Time range: one row, scopes everything below */
+.ins-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ins-range {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ins-range:hover {
+  background: var(--c-sky);
+}
+.ins-range.active {
+  border-color: var(--c-blue);
+  background: var(--c-blue);
+  color: #fff;
+}
+.ins-range:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+.ins-span {
+  margin-left: 4px;
+  color: var(--c-muted);
+  font-size: 0.82rem;
+}
+
+/* Stat tiles */
+.ins-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-line);
+}
+.ins-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 20px;
+  background: #fff;
+}
+.ins-tile-label {
+  color: var(--c-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.ins-tile-value {
+  color: var(--c-ink);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.ins-tile-sub {
+  color: var(--c-muted);
+  font-size: 0.8rem;
+}
+.ins-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-weight: 600;
+}
+.ins-delta .material-icons {
+  font-size: 14px;
+}
+.ins-delta.up {
+  color: #006300;
+}
+.ins-delta.down {
+  color: var(--c-red);
+}
+.ins-delta.flat {
+  color: var(--c-muted);
+}
+
+/* Chart cards */
+.ins-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.ins-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.ins-card h3 {
+  margin: 0;
+  color: var(--c-ink);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+.ins-card > .ins-sub {
+  margin-bottom: 14px;
+}
+.ins-empty {
+  margin: 8px 0 0;
+  padding: 18px;
+  border-radius: 8px;
+  background: var(--c-paper);
+  color: var(--c-muted);
+  font-size: 0.88rem;
+}
+
+/* Column chart */
+.ins-cols {
+  position: relative;
+  height: 210px;
+  padding: 0 0 22px 28px;
+}
+.ins-cols-grid {
+  position: absolute;
+  inset: 0 0 22px 28px;
+}
+.ins-gridline {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--c-line-soft);
+}
+.ins-gridline:first-child {
+  border-top-color: var(--c-line);
+}
+.ins-gridline span {
+  position: absolute;
+  top: -8px;
+  left: -28px;
+  width: 22px;
+  color: var(--c-muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ins-cols-plot {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+.ins-col-slot {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+.ins-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(24px, 70%);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: none;
+  cursor: default;
+}
+/* Bigger hover/focus target than the painted column */
+.ins-col::before {
+  content: "";
+  position: absolute;
+  inset: -40px -6px 0;
+}
+.ins-col:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+.ins-seg {
+  display: block;
+  min-height: 2px;
+}
+.ins-col .ins-seg:first-of-type {
+  border-radius: 4px 4px 0 0;
+}
+.ins-col:hover .ins-seg,
+.ins-col:focus-visible .ins-seg {
+  filter: brightness(1.12);
+}
+.ins-col-value {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--c-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.ins-col-label {
+  position: absolute;
+  bottom: -20px;
+  color: var(--c-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+/* Ranked horizontal bars */
+.ins-bars {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ins-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+}
+.ins-bars li:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 3px;
+}
+.ins-bar-name {
+  overflow: hidden;
+  color: var(--c-text);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ins-bar-track {
+  height: 14px;
+}
+.ins-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--c-blue);
+}
+.ins-bars li:hover .ins-bar-fill {
+  filter: brightness(1.12);
+}
+.ins-bar-value {
+  color: var(--c-text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Tall segmented bar: one whole split into parts */
+.ins-split {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin-top: 6px;
+}
+.ins-split-part {
+  display: flex;
+  align-items: center;
+  min-width: 2px;
+  padding-left: 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ins-split-part:hover {
+  filter: brightness(1.08);
+}
+.ins-split-part:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* Legend: names only, swatch beside the text */
+.ins-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--c-text);
+  font-size: 0.82rem;
+}
+.ins-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ins-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* Safety flags: icon + words, never color alone */
+.ins-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdeeed;
+  color: var(--c-text);
+  font-size: 0.86rem;
+}
+.ins-flag .material-icons {
+  color: var(--c-red);
+  font-size: 18px;
+}
+.ins-flag.none {
+  background: var(--c-paper);
+}
+.ins-flag.none .material-icons {
+  color: #006300;
+}
+
+/* Table view twin of every chart */
+.ins-table {
+  margin-top: 12px;
+}
+.ins-table summary {
+  color: var(--c-blue);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ins-table table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.ins-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.ins-table :is(th, td) {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--c-line-soft);
+  text-align: left;
+}
+.ins-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tooltip: value first, label second */
+.ins-tip {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 16px -8px rgba(22, 50, 92, 0.35);
+  transform: translate(-50%, calc(-100% - 8px));
+  pointer-events: none;
+}
+.ins-tip[hidden] {
+  display: none;
+}
+.ins-tip-value {
+  color: var(--c-ink);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.ins-tip-title {
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 1100px) {
+  .ins-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ins-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .ins-bars li {
+    grid-template-columns: minmax(0, 1fr) 2rem;
+  }
+  .ins-bar-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

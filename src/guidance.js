@@ -32,6 +32,7 @@ import {
   finishPasswordChange,
 } from "./remote.js";
 import { renderCounselorCalendar } from "./calendarView.js";
+import { renderInsights } from "./insights.js";
 
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
 import {
@@ -56,6 +57,8 @@ let currentSession = null;
 let tableFilter = "all";
 // Filter chosen on the Concerns tab
 let concernFilter = "open";
+// Time range on the Insights tab
+let insightsRange = "90";
 
 // Appointments assigned to this counselor, plus unassigned ("Any Available") requests
 function getMyAppointments() {
@@ -512,6 +515,8 @@ function renderTab(target) {
     const me = getUserById(currentSession.id) || currentSession;
     content.innerHTML = renderGuidanceSettings(me.notifyEmail || me.email);
     attachSettingsListener();
+  } else if (target === "insights") {
+    insightsRange = renderInsights(content, currentSession, insightsRange);
   } else if (target === "concerns") {
     content.innerHTML = renderConcerns(getConcerns(), concernFilter);
   } else if (target === "logs") {
@@ -528,7 +533,11 @@ function refreshCurrentView() {
   const search = document.getElementById("tableSearch");
   if (target === "appointments" && !(search && search.value)) {
     renderAppointmentsTable();
-  } else if (target === "calendar" || target === "logs") {
+  } else if (
+    target === "calendar" ||
+    target === "logs" ||
+    target === "insights"
+  ) {
     renderTab(target);
   } else if (
     target === "concerns" &&
@@ -589,6 +598,10 @@ export function renderGuidanceView(root, session, onLogout) {
                         <i class="material-icons">calendar_today</i>
                         <span>Appointments</span>
                         <span class="badge" id="pendingBadge">0</span>
+                    </button>
+                    <button class="nav-item" data-target="insights">
+                        <i class="material-icons">insights</i>
+                        <span>Insights</span>
                     </button>
                     <button class="nav-item" data-target="calendar">
                         <i class="material-icons">calendar_month</i>
@@ -908,6 +921,13 @@ function setupAdminListeners(onLogout) {
 
     if (e.target.closest("#logWalkInBtn")) {
       openWalkInModal();
+      return;
+    }
+
+    const rangeBtn = e.target.closest("[data-range]");
+    if (rangeBtn) {
+      insightsRange = rangeBtn.dataset.range;
+      renderTab("insights");
       return;
     }
 

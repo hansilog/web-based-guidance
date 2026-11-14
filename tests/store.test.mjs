@@ -307,4 +307,105 @@ test("broadcasts are stored newest first", () => {
   assert.equal(store.getBroadcasts()[0].message, "second");
 });
 
+const { computeInsights, _internals } = await load("insights.js");
+
+test("insights: tiles count the counselor's own sessions in range", () => {
+  const now = new Date();
+  const ago = (days, time = "10:00") => {
+    const d = new Date(now.getTime() - days * 86400000);
+    return { date: store.toDateStr(d), time };
+  };
+  const base = { counselorId: 2, studentId: 1, type: "Academic Guidance" };
+  const iso = (days, hours = 0) =>
+    new Date(now.getTime() - days * 86400000 + hours * 3600000).toISOString();
+  store.saveAppointments([
+    { ...base, id: 1, ...ago(3), status: "completed", feedback: { rating: 5 } },
+    { ...base, id: 2, ...ago(10), status: "completed", walkIn: true },
+    {
+      ...base,
+      id: 3,
+      ...ago(12),
+      status: "completed",
+      feedback: { rating: 3 },
+    },
+    { ...base, id: 4, ...ago(5), status: "no-show" },
+    { ...base, id: 5, ...ago(6), status: "cancelled", type: "Grief / Loss" },
+    {
+      ...base,
+      id: 6,
+      ...ago(8),
+      status: "rejected",
+      createdAt: iso(9),
+      decidedAt: iso(9, 4),
+    },
+    {
+      ...base,
+      id: 7,
+      ...ago(4),
+      status: "approved",
+      createdAt: iso(5),
+      decidedAt: iso(5, 2),
+      checkIn: { level: "High", safetyFlag: true },
+    },
+    { ...base, id: 8, ...ago(40), status: "completed" }, // previous 30 days
+    { ...base, id: 9, ...ago(2), status: "completed", counselorId: 4 }, // someone else
+  ]);
+  const d = computeInsights(2, 30, now);
+  assert.equal(d.sessions, 3);
+  assert.equal(d.prevSessions, 1);
+  assert.equal(d.walkIns, 1);
+  // 1 no-show out of 2 booked completed + 1 no-show
+  assert.equal(d.noShowRate, 33);
+  assert.equal(d.avgRating, 4);
+  assert.equal(d.avgResponseHours, 3);
+  assert.equal(
+    d.perWeek.reduce((s, w) => s + w.count, 0),
+    3,
+  );
+  assert.deepEqual(
+    d.outcomes.map((o) => [o.status, o.count]),
+    [
+      ["completed", 3],
+      ["no-show", 1],
+      ["cancelled", 1],
+      ["rejected", 1],
+    ],
+  );
+  assert.equal(d.checkIns, 1);
+  assert.equal(d.safetyFlags, 1);
+  assert.equal(
+    d.checkInWeeks.reduce((s, w) => s + w.levels[2], 0),
+    1,
+  );
+  assert.equal(d.concerns[0].type, "Academic Guidance");
+});
+
+test("insights: more than 6 concern types fold into 'Other types'", () => {
+  const today = store.toDateStr(new Date(Date.now() - 86400000));
+  store.saveAppointments(
+    ["A", "B", "C", "D", "E", "F", "G", "H"].map((t, i) => ({
+      id: 100 + i,
+      counselorId: 2,
+      studentId: 1,
+      type: `Type ${t}`,
+      date: today,
+      time: "09:00",
+      status: "pending",
+    })),
+  );
+  const d = computeInsights(2, 30);
+  assert.equal(d.concerns.length, 6);
+  assert.equal(d.concerns[5].type, "Other types");
+  assert.equal(d.concerns[5].count, 3);
+});
+
+test("insights: clean axis ticks and Monday weeks", () => {
+  assert.deepEqual(_internals.niceTicks(5), [0, 2, 4, 6]);
+  assert.deepEqual(_internals.niceTicks(23), [0, 10, 20, 30]);
+  assert.deepEqual(_internals.niceTicks(0), [0, 1]);
+  const monday = _internals.mondayOf(new Date(2026, 10, 14)); // Saturday
+  assert.equal(monday.getDay(), 1);
+  assert.equal(monday.getDate(), 9);
+});
+
 console.log(`\n${passed} tests passed`);

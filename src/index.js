@@ -36,6 +36,7 @@ import "./styles/features.css";
 import "./styles/theme.css";
 import "./styles/student-theme.css";
 import "./styles/counselor.css";
+import "./styles/insights.css";
 import "./styles/admin-theme.css";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;

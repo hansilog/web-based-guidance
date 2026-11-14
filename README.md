@@ -4,6 +4,7 @@ our title is web based guidance management and scheduling system.
 ## Features
 
 **Students**
+
 - Book one-hour sessions within office hours (default Mon–Fri, 8 AM–5 PM, lunch 12–1; set by the admin) from open time slots; taken times and counselor days off are blocked
 - Pick a counselor or "Any Available" (assigned to the free counselor with the lightest load)
 - Reschedule or cancel pending/upcoming sessions, rate completed sessions (1–5 stars)
@@ -15,7 +16,9 @@ our title is web based guidance management and scheduling system.
 - Reminders a day before and an hour before approved sessions (notification, plus email the day before)
 
 **Guidance counselors**
+
 - Overview: pending, urgent, today's and needs-closing counts that filter the queue when clicked
+- Insights: sessions per week, most common concerns, how sessions ended, wellbeing check-in levels, no-show rate, rating and response time for the last 30 / 90 / 365 days (every chart has a table view)
 - Today's schedule and a follow-up tracker with one-click reminders to students
 - Log walk-in sessions for students who came in without booking, saved to their case file
 - Appointment queue with status filter; approve (with time change) or reject with a reason
@@ -27,6 +30,7 @@ our title is web based guidance management and scheduling system.
 - Notification bell, activity log, notification email and password settings
 
 **Admin**
+
 - Manage counselors (moving active appointments back to the shared queue on delete)
 - Manage students: search, deactivate/activate, reset password
 - Reports: request types, statuses, year level, course, satisfaction ratings; CSV export and printable report
@@ -35,6 +39,7 @@ our title is web based guidance management and scheduling system.
 - Counselor performance: completed sessions, last 7 days, active load, no-show rate, rating, response time
 
 **Public (no account)**
+
 - Anonymous concern box on the landing page with a reference code to check for a reply
 
 **Security basics** — data privacy consent at registration, hashed passwords, session re-checked against the user list on every load,
@@ -54,6 +59,7 @@ src/
 │                    #   office settings, availability, waitlist, concerns, notifications, logs, broadcasts
 ├── reminders.js     # Day-before / hour-before session reminders
 ├── checkin.js       # Wellbeing check-in questions, scoring, and counselor views
+├── insights.js      # Counselor Insights tab: stat tiles and charts (plain HTML/CSS)
 ├── ui.js            # Shared dialog + notification bell
 ├── student.js       # Student portal (dashboard, booking, reschedule, rating, history, settings, AI chat)
 ├── guidance.js      # Counselor portal logic
@@ -94,13 +100,13 @@ Check-in answers stay out of the AI case summary, the CSV export, emails and the
 
 With Supabase, register accounts in the app and make the first admin as described in [supabase/README.md](supabase/README.md).
 
-| Role | Username | Password |
-| --- | --- | --- |
-| Student | `student` | `123` |
-| Student | `johndoe` | `pass123` |
-| Counselor | `guidance` | `123` |
-| Counselor | `guidance2` | `123` |
-| Admin | `admin` | `admin123` |
+| Role      | Username    | Password   |
+| --------- | ----------- | ---------- |
+| Student   | `student`   | `123`      |
+| Student   | `johndoe`   | `pass123`  |
+| Counselor | `guidance`  | `123`      |
+| Counselor | `guidance2` | `123`      |
+| Admin     | `admin`     | `admin123` |
 
 ## Scripts
 
