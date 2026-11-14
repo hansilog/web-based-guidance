@@ -1,0 +1,699 @@
+/* =========================================================
+   counselor.css
+   Look of the guidance counselor portal only (.guidance-portal,
+   plus body.counselor-portal for dialogs added to <body>).
+   Navy sidebar, quiet paper background, thin borders instead of
+   floating shadows, Public Sans for the interface and Source Serif 4
+   for the greeting and section titles.
+   ========================================================= */
+
+body.counselor-portal {
+  --c-ink: #16325c;
+  --c-ink-soft: #234372;
+  --c-blue: #1f5fbf;
+  --c-blue-dark: #194f9f;
+  --c-sky: #e8f0fb;
+  --c-paper: #f5f7fa;
+  --c-line: #d8e0ea;
+  --c-line-soft: #edf1f6;
+  --c-text: #1e2a3b;
+  --c-muted: #5b6b80;
+  --c-amber: #8a5300;
+  --c-red: #b42318;
+  --c-green: #1f6b3f;
+  --c-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --c-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  background: var(--c-paper);
+}
+
+body.counselor-portal .guidance-portal,
+body.counselor-portal .custom-modal-overlay {
+  font-family: var(--c-ui);
+  color: var(--c-text);
+}
+body.counselor-portal .guidance-portal button,
+body.counselor-portal .guidance-portal input,
+body.counselor-portal .guidance-portal select,
+body.counselor-portal .guidance-portal textarea,
+body.counselor-portal .custom-modal-overlay button,
+body.counselor-portal .custom-modal-overlay input,
+body.counselor-portal .custom-modal-overlay select,
+body.counselor-portal .custom-modal-overlay textarea {
+  font-family: inherit;
+}
+
+.guidance-portal {
+  background: var(--c-paper);
+}
+
+/* --- Sidebar --- */
+.guidance-portal .sidebar {
+  background: var(--c-ink);
+  border-right: 0;
+  padding: 24px 14px;
+}
+.guidance-portal .sidebar-header {
+  margin-bottom: 18px;
+  padding: 0 8px;
+}
+.guidance-portal .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.guidance-portal .brand > .material-icons {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 20px;
+}
+.guidance-portal .brand-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.guidance-portal .brand-name {
+  color: #fff;
+  font-family: var(--c-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.guidance-portal .system-tag {
+  display: block;
+  color: #a9bedb;
+  font-size: 0.78rem;
+}
+.guidance-portal .nav-label {
+  padding: 18px 12px 6px;
+  color: #8fa6c7;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.guidance-portal .sidebar-search {
+  margin: 4px 4px 0;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.guidance-portal .sidebar-search i {
+  color: #8fa6c7;
+}
+.guidance-portal .sidebar-search input {
+  color: #fff;
+}
+.guidance-portal .sidebar-search input::placeholder {
+  color: #8fa6c7;
+}
+.guidance-portal .sidebar-search:focus-within {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 2px #8fb4ea;
+}
+.guidance-portal .nav-item {
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #d3dfef;
+  font-weight: 500;
+  font-size: 0.93rem;
+  transition: background 0.15s ease;
+}
+.guidance-portal .nav-item i {
+  color: #9fb5d3;
+  font-size: 20px;
+}
+.guidance-portal .nav-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+.guidance-portal .nav-item.active {
+  background: #fff;
+  color: var(--c-ink);
+  font-weight: 600;
+}
+.guidance-portal .nav-item.active i {
+  color: var(--c-blue);
+}
+.guidance-portal .nav-item:focus-visible {
+  outline: 2px solid #8fb4ea;
+  outline-offset: 2px;
+}
+.guidance-portal .nav-item .badge {
+  min-width: 20px;
+  padding: 1px 7px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.guidance-portal .nav-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.guidance-portal .nav-item.logout {
+  margin-bottom: 0;
+  color: #f4b4b4 !important;
+}
+.guidance-portal .nav-item.logout i {
+  color: #f4b4b4;
+}
+.guidance-portal .nav-item.logout:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* --- Header --- */
+.guidance-portal .view-header {
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.guidance-portal .view-header h1 {
+  color: var(--c-ink);
+  font-family: var(--c-serif);
+  font-size: clamp(1.6rem, 2.6vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.guidance-portal .header-greeting {
+  margin-top: 4px;
+  color: var(--c-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.guidance-portal .bell-btn {
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+  color: var(--c-ink);
+}
+
+/* --- Counter strip: one ledger row instead of four floating cards --- */
+.guidance-portal .overview-stats {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-line);
+}
+.guidance-portal .overview-stat {
+  position: relative;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  transition: background 0.15s ease;
+}
+.guidance-portal .overview-stat:hover {
+  background: #f8fafd;
+  box-shadow: none;
+}
+.guidance-portal .overview-stat:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: -2px;
+}
+.guidance-portal .overview-icon {
+  display: none;
+}
+.guidance-portal .overview-value {
+  color: var(--c-ink);
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+.guidance-portal .overview-label {
+  margin-top: 4px;
+  color: var(--c-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.guidance-portal .overview-hint {
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+/* Numbers that need attention take their status color; zero stays quiet */
+.guidance-portal .overview-stat:not(.has-items) .overview-value {
+  color: #a3b1c2;
+}
+.guidance-portal .overview-stat.urgent.has-items .overview-value {
+  color: var(--c-red);
+}
+.guidance-portal .overview-stat.pending.has-items .overview-value {
+  color: var(--c-amber);
+}
+/* The selected counter filters the queue below */
+.guidance-portal .overview-stat.active {
+  background: var(--c-sky);
+  box-shadow: inset 0 -3px 0 var(--c-blue);
+}
+.guidance-portal .overview-stat.pending.active,
+.guidance-portal .overview-stat.urgent.active,
+.guidance-portal .overview-stat.today.active,
+.guidance-portal .overview-stat.to-close.active {
+  border-color: transparent;
+}
+
+/* --- Panels and cards: thin borders, no floating shadows --- */
+.guidance-portal .overview-panel,
+.guidance-portal .table-card,
+.guidance-portal .admin-card,
+.guidance-portal .settings-card {
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+.guidance-portal .overview-panel h3,
+.guidance-portal .table-header-main h2,
+.guidance-portal .admin-card .card-header h2,
+.guidance-portal .settings-card .card-header h2 {
+  color: var(--c-ink);
+  font-family: var(--c-serif);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.guidance-portal .overview-panel h3 {
+  font-size: 1.08rem;
+}
+.guidance-portal .overview-panel h3 .material-icons,
+.guidance-portal .table-header-main h2 .material-icons,
+.guidance-portal .admin-card .card-header h2 .material-icons {
+  color: var(--c-blue);
+}
+.guidance-portal .panel-row {
+  border-top-color: var(--c-line-soft);
+}
+.guidance-portal .panel-time {
+  color: var(--c-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.guidance-portal .panel-empty {
+  color: var(--c-muted);
+}
+
+.guidance-portal .admin-card .subtitle,
+.guidance-portal .admin-card .card-header p,
+.guidance-portal .cal-help {
+  margin: 6px 0 0;
+  color: var(--c-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+/* Secondary buttons (Export PDF, Request OTP, week arrows) */
+.guidance-portal .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.guidance-portal .btn-secondary:hover {
+  background: var(--c-sky);
+}
+.guidance-portal .btn-secondary .material-icons {
+  font-size: 18px;
+}
+.guidance-portal .case-btn {
+  border: 1px solid var(--c-line);
+  background: #fff;
+}
+.guidance-portal .concern-filter.active {
+  border-color: var(--c-blue);
+  background: var(--c-blue);
+}
+
+/* --- Appointment queue --- */
+.guidance-portal .table-card {
+  overflow: hidden;
+}
+.guidance-portal .table-header-main {
+  border-bottom: 1px solid var(--c-line);
+}
+.guidance-portal #tableSearch,
+.guidance-portal #statusFilter,
+.guidance-portal #studentSearch {
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-text);
+  font-size: 0.88rem;
+}
+.guidance-portal #statusFilter {
+  padding: 8px 10px;
+}
+.guidance-portal #tableSearch:focus,
+.guidance-portal #statusFilter:focus,
+.guidance-portal #studentSearch:focus {
+  border-color: var(--c-blue);
+  outline: 2px solid var(--c-sky);
+}
+.guidance-portal table th {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-muted);
+  font-size: 0.8rem !important;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.guidance-portal table td {
+  border-bottom: 1px solid var(--c-line-soft);
+  color: var(--c-text);
+}
+.guidance-portal #adminTable tbody tr:hover td {
+  background: #fafcff;
+}
+.guidance-portal .case-link,
+.guidance-portal #adminTable .user-name {
+  color: var(--c-ink);
+  font-weight: 600;
+}
+.guidance-portal .case-link:hover {
+  color: var(--c-blue);
+}
+.guidance-portal .user-email,
+.guidance-portal .row-sub,
+.guidance-portal #adminTable .date-info small {
+  color: var(--c-muted);
+}
+.guidance-portal .type-tag {
+  color: var(--c-text);
+  font-weight: 500;
+}
+.guidance-portal #adminTable tr.urgent-row td:first-child {
+  box-shadow: inset 3px 0 0 var(--c-red);
+}
+
+/* Status: sentence case, one shape */
+body.counselor-portal .status-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: none;
+}
+body.counselor-portal .status-pill.pending {
+  background: #fff4db;
+  color: var(--c-amber);
+}
+body.counselor-portal .status-pill.approved {
+  background: #e3f4ea;
+  color: var(--c-green);
+}
+body.counselor-portal .status-pill.completed {
+  background: var(--c-sky);
+  color: var(--c-ink);
+}
+body.counselor-portal .status-pill.rejected,
+body.counselor-portal .status-pill.no-show {
+  background: #fde8e7;
+  color: var(--c-red);
+}
+body.counselor-portal .status-pill.cancelled {
+  background: #eef1f5;
+  color: var(--c-muted);
+}
+body.counselor-portal .urgent-tag {
+  background: #fde8e7;
+  color: var(--c-red);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Row actions: the next step is a solid button, the alternative is an outline */
+.guidance-portal .act-btn {
+  padding: 6px 11px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+.guidance-portal .act-btn:hover {
+  filter: none;
+  background: #f4f7fb;
+}
+.guidance-portal .act-btn:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+.guidance-portal .act-btn.approve,
+.guidance-portal .act-btn.complete {
+  border-color: var(--c-blue);
+  background: var(--c-blue);
+  color: #fff;
+}
+.guidance-portal .act-btn.approve:hover,
+.guidance-portal .act-btn.complete:hover {
+  background: var(--c-blue-dark);
+}
+.guidance-portal .act-btn.reject,
+.guidance-portal .act-btn.noshow {
+  border-color: var(--c-line);
+  background: #fff;
+}
+.guidance-portal .act-btn.reject {
+  color: var(--c-red);
+}
+.guidance-portal .act-btn.noshow {
+  color: var(--c-muted);
+}
+.guidance-portal .act-btn.reject:hover {
+  background: #fdf3f2;
+}
+.guidance-portal .act-btn.noshow:hover {
+  background: #f4f7fb;
+}
+/* "Log walk-in" and "Remind" are secondary tools, not the next step */
+.guidance-portal #logWalkInBtn,
+.guidance-portal .act-btn.remind-btn {
+  border-color: var(--c-line);
+  background: #fff;
+  color: var(--c-ink);
+}
+.guidance-portal #logWalkInBtn:hover,
+.guidance-portal .act-btn.remind-btn:hover:not(:disabled) {
+  background: var(--c-sky);
+}
+.guidance-portal .row-note {
+  color: var(--c-muted);
+  font-style: normal;
+}
+
+/* --- Calendar: events marked by a colored edge --- */
+.guidance-portal .cal-grid {
+  border-color: var(--c-line);
+}
+.guidance-portal .cal-day-head {
+  color: var(--c-ink);
+}
+.guidance-portal .cal-day-head.today {
+  box-shadow: inset 0 -3px 0 var(--c-blue);
+}
+.guidance-portal .cal-event {
+  border: 0;
+  border-left: 3px solid;
+  border-radius: 6px;
+  color: var(--c-text);
+}
+.guidance-portal .cal-event.pending {
+  border-left-color: #d69e2e;
+  background: #fff8e6;
+}
+.guidance-portal .cal-event.approved {
+  border-left-color: #2f855a;
+  background: #ebf7f0;
+}
+.guidance-portal .cal-event.completed {
+  border-left-color: var(--c-blue);
+  background: var(--c-sky);
+}
+.guidance-portal .cal-event.no-show {
+  border-left-color: var(--c-red);
+  background: #fdeeed;
+}
+/* Legend matches the colored edges of the events */
+.guidance-portal .cal-dot {
+  border: 0;
+  border-left: 3px solid;
+  border-radius: 2px;
+}
+.guidance-portal .cal-dot.pending {
+  border-left-color: #d69e2e;
+  background: #fff8e6;
+}
+.guidance-portal .cal-dot.approved {
+  border-left-color: #2f855a;
+  background: #ebf7f0;
+}
+.guidance-portal .cal-dot.completed {
+  border-left-color: var(--c-blue);
+  background: var(--c-sky);
+}
+.guidance-portal .cal-dot.no-show {
+  border-left-color: var(--c-red);
+  background: #fdeeed;
+}
+.guidance-portal .cal-dot.off {
+  border: 1px solid var(--c-line);
+}
+.guidance-portal .cal-toolbar .btn-secondary {
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-ink);
+}
+
+/* --- Dialogs opened from the counselor portal --- */
+body.counselor-portal .app-modal-card {
+  border: 1px solid var(--c-line);
+  border-radius: 14px;
+}
+body.counselor-portal .custom-modal-header h3 {
+  color: var(--c-ink);
+  font-family: var(--c-serif);
+  font-weight: 600;
+}
+body.counselor-portal .modal-icon {
+  color: var(--c-blue);
+}
+body.counselor-portal .modal-icon.danger {
+  color: var(--c-red);
+}
+body.counselor-portal .modal-btn.confirm-btn {
+  background: var(--c-blue);
+}
+body.counselor-portal .modal-btn.confirm-btn:hover {
+  background: var(--c-blue-dark);
+}
+
+/* --- Settings --- */
+.guidance-portal .glass-card.settings-card {
+  box-shadow: none;
+}
+.guidance-portal .settings-card .card-header p {
+  margin-top: 4px;
+}
+.guidance-portal .settings-form label {
+  color: var(--c-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.guidance-portal .settings-form input,
+.guidance-portal .settings-form input:valid,
+.guidance-portal .settings-form input:invalid {
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+  color: var(--c-text);
+}
+.guidance-portal .settings-form input:focus {
+  border-color: var(--c-blue);
+  outline: 2px solid var(--c-sky);
+}
+.guidance-portal .settings-card .primary-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--c-blue);
+  font-size: 0.92rem;
+}
+.guidance-portal .settings-card .primary-btn:hover {
+  background: var(--c-blue-dark);
+}
+.guidance-portal .settings-card hr {
+  border-top-color: var(--c-line) !important;
+}
+
+/* --- Phones: the sidebar becomes a scrollable top bar --- */
+@media screen and (max-width: 768px) {
+  .guidance-portal .sidebar {
+    background: var(--c-ink) !important;
+    padding: 6px 8px;
+  }
+  .guidance-portal #admin-nav {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    overflow: visible;
+  }
+  .guidance-portal .nav-group {
+    justify-content: flex-start !important;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .guidance-portal .nav-group::-webkit-scrollbar {
+    display: none;
+  }
+  .guidance-portal .nav-item {
+    position: relative;
+    flex-shrink: 0;
+    width: auto;
+    margin: 0;
+    padding: 6px 10px !important;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  .guidance-portal .nav-item .badge {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    min-width: 0;
+    padding: 0 5px;
+    font-size: 0.62rem;
+  }
+  .guidance-portal .nav-footer {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0 0 0 6px;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .guidance-portal .nav-item.logout span {
+    display: none;
+  }
+  .guidance-portal .view-header {
+    flex-direction: row;
+    gap: 12px;
+  }
+  .guidance-portal .view-header h1 {
+    font-size: 1.45rem;
+  }
+  .guidance-portal .overview-stat {
+    padding: 12px 14px;
+  }
+  .guidance-portal .overview-value {
+    font-size: 1.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guidance-portal *,
+  body.counselor-portal .custom-modal-overlay * {
+    transition: none !important;
+  }
+}

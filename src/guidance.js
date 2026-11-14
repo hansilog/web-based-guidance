@@ -1,5 +1,6 @@
 import emailjs from "@emailjs/browser";
 import "./styles/guidance.css";
+import "./styles/counselor.css";
 import {
   listenForRealTimeUpdates,
   renderBroadcastBanner,
@@ -542,8 +543,18 @@ function refreshCurrentView() {
 
 // --- 4. MAIN LAYOUT INITIALIZER & ROUTER ---
 
+// "Good morning" / "Good afternoon" / "Good evening"
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export function renderGuidanceView(root, session, onLogout) {
   currentSession = session;
+  // Lets dialogs (added to <body>) share the counselor portal's look
+  document.body.classList.add("counselor-portal");
 
   // Mount the real-time syncing subscription hook exactly ONCE
   listenForRealTimeUpdates(() => {
@@ -559,7 +570,7 @@ export function renderGuidanceView(root, session, onLogout) {
         <aside class="sidebar" id="admin-sidebar">
             <div class="sidebar-header">
                 <div class="brand">
-                    <i class="material-icons">gavel</i>
+                    <i class="material-icons" aria-hidden="true">school</i>
                     <div class="brand-info">
                         <span class="brand-name">Granby Gateway</span>
                         <span class="system-tag">Guidance Office</span>
@@ -567,7 +578,6 @@ export function renderGuidanceView(root, session, onLogout) {
                 </div>
             </div>
 
-            <div class="nav-label">Main Menu</div>
             <div class="sidebar-search">
                 <i class="material-icons">search</i>
                 <input type="text" id="globalNavSearch" class="search" placeholder="Quick find">
@@ -600,7 +610,7 @@ export function renderGuidanceView(root, session, onLogout) {
                         <span>Activity Logs</span>
                     </button>
 
-                    <div class="nav-label">System</div>
+                    <div class="nav-label">Account</div>
                     <button class="nav-item" data-target="settings">
                         <i class="material-icons">settings</i>
                         <span>Settings</span>
@@ -619,8 +629,8 @@ export function renderGuidanceView(root, session, onLogout) {
         <main class="content-area">
             <header class="view-header">
                 <div class="header-info">
-                    <h1>Guidance Dashboard</h1>
-                    <p class="header-greeting">Good day, ${escapeHtml(session.name)} <span>· ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span></p>
+                    <h1>${greeting()}, ${escapeHtml(session.name)}</h1>
+                    <p class="header-greeting">${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
                 </div>
                 <div class="header-actions">
                     ${renderBellHtml()}

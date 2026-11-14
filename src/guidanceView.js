@@ -69,7 +69,7 @@ function renderRowActions(app) {
 // At-a-glance row + today's schedule + follow-ups, shown above the queue
 export function renderOverview({ stats, filter, today, followUps }) {
   const statCard = (key, icon, label, value, hint) => `
-    <button type="button" class="overview-stat ${key} ${filter === key ? "active" : ""}" data-filter="${key}" aria-pressed="${filter === key}">
+    <button type="button" class="overview-stat ${key} ${filter === key ? "active" : ""} ${value > 0 ? "has-items" : ""}" data-filter="${key}" aria-pressed="${filter === key}">
       <span class="overview-icon"><i class="material-icons">${icon}</i></span>
       <span class="overview-text">
         <span class="overview-value">${value}</span>
