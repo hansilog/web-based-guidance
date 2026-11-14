@@ -189,6 +189,35 @@ export const COUNSELING_TYPES = [
 ];
 export const SESSION_MODES = ["In-person", "Online (video call)"];
 
+// --- Online sessions ---
+
+export const isOnlineSession = (app) => /online/i.test(app?.mode || "");
+
+// Only https links (Meet, Zoom, Teams...); also enforced by the database
+export function isMeetingLink(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+// The Join button opens 10 minutes before the start and closes an hour after
+export const JOIN_EARLY_MINUTES = 10;
+export const SESSION_MINUTES = 60;
+
+export function joinWindow(app, now = new Date()) {
+  if (app?.status !== "approved" || !app.meetingLink) return null;
+  const start = appointmentStart(app);
+  const opens = new Date(start.getTime() - JOIN_EARLY_MINUTES * 60000);
+  const closes = new Date(start.getTime() + SESSION_MINUTES * 60000);
+  let state = "open";
+  if (now < opens) state = "early";
+  else if (now > closes) state = "over";
+  return { opens, closes, state };
+}
+
 // A counselor's focus, shown next to their name when students choose one.
 // Built from the counseling types so the two lists always match.
 export const COUNSELOR_SPECIALTIES = [

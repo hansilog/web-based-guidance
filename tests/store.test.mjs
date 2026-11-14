@@ -539,4 +539,33 @@ test("check-on list: reaching out marks the row and moves it last for a week", (
   );
 });
 
+test("online sessions: only https links; Join opens 10 min before, closes after an hour", () => {
+  assert.equal(
+    store.isMeetingLink("https://meet.google.com/abc-defg-hij"),
+    true,
+  );
+  assert.equal(store.isMeetingLink("  https://zoom.us/j/123  "), true);
+  assert.equal(store.isMeetingLink("http://meet.google.com/abc"), false);
+  assert.equal(store.isMeetingLink("javascript:alert(1)"), false);
+  assert.equal(store.isMeetingLink("meet.google.com/abc"), false);
+  assert.equal(store.isMeetingLink(""), false);
+
+  assert.equal(store.isOnlineSession({ mode: "Online (video call)" }), true);
+  assert.equal(store.isOnlineSession({ mode: "In-person" }), false);
+
+  const app = {
+    status: "approved",
+    meetingLink: "https://meet.google.com/x",
+    date: "2026-11-16",
+    time: "15:00",
+  };
+  const at = (h, m) => new Date(2026, 10, 16, h, m);
+  assert.equal(store.joinWindow(app, at(14, 49)).state, "early");
+  assert.equal(store.joinWindow(app, at(14, 50)).state, "open");
+  assert.equal(store.joinWindow(app, at(15, 59)).state, "open");
+  assert.equal(store.joinWindow(app, at(16, 1)).state, "over");
+  assert.equal(store.joinWindow({ ...app, meetingLink: null }), null);
+  assert.equal(store.joinWindow({ ...app, status: "pending" }), null);
+});
+
 console.log(`\n${passed} tests passed`);

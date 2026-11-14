@@ -666,6 +666,38 @@ await test("reminders: day-before, then hour-before, never twice", async () => {
   );
 });
 
+await test("meeting links: https only, set by staff, students can't change them", async () => {
+  await as(
+    coun.authId,
+    "update public.appointments set meeting_link = 'https://meet.google.com/abc-defg-hij' where id = 2001",
+  );
+  await rejects(
+    as(
+      coun.authId,
+      "update public.appointments set meeting_link = 'javascript:alert(1)' where id = 2001",
+    ),
+    /appointments_meeting_link_https|check constraint/,
+  );
+  await rejects(
+    as(
+      coun.authId,
+      "update public.appointments set meeting_link = 'http://meet.google.com/x' where id = 2001",
+    ),
+    /appointments_meeting_link_https|check constraint/,
+  );
+  await rejects(
+    as(
+      stu2.authId,
+      "update public.appointments set meeting_link = 'https://evil.example' where id = 2001",
+    ),
+    /cannot change/,
+  );
+  const { rows } = await sql(
+    "select meeting_link from public.appointments where id = 2001",
+  );
+  assert.equal(rows[0].meeting_link, "https://meet.google.com/abc-defg-hij");
+});
+
 await test("deleting a counselor keeps appointments (unassigned)", async () => {
   await as(adm.authId, "delete from public.profiles where id = $1", [coun2.id]);
   const { rows } = await sql(

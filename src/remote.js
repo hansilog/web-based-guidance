@@ -81,6 +81,7 @@ export const COLLECTIONS = {
       ["followUp", "follow_up"],
       ["followUpRemindedAt", "follow_up_reminded_at"],
       ["checkedOnAt", "checked_on_at"],
+      ["meetingLink", "meeting_link"],
       ["feedback", "feedback"],
       ["checkIn", "check_in"],
       ["reminders", "reminders"],

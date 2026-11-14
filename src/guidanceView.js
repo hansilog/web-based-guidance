@@ -5,6 +5,7 @@ import {
   appointmentStart,
   COUNSELING_TYPES,
   CONCERN_STATUSES,
+  isOnlineSession,
 } from "./store.js";
 import { checkInTag, checkInDetailsHtml } from "./checkin.js";
 
@@ -53,6 +54,15 @@ function renderRowActions(app) {
       return (
         actionButton("completed", app.id, "task_alt", "Complete", "complete") +
         actionButton("no-show", app.id, "person_off", "No-show", "noshow")
+      );
+    }
+    if (isOnlineSession(app)) {
+      return actionButton(
+        "link",
+        app.id,
+        app.meetingLink ? "link" : "add_link",
+        app.meetingLink ? "Edit link" : "Add link",
+        app.meetingLink ? "noshow" : "complete",
       );
     }
     return `<span class="row-note">Upcoming</span>`;
@@ -141,7 +151,11 @@ export function renderOverview({ stats, filter, today, followUps, checkOn }) {
                   <button type="button" class="case-link" data-student="${app.studentId}" title="Open case file">${escapeHtml(app.studentName)}</button>
                   <small>${escapeHtml(app.type)}${app.mode ? ` · ${escapeHtml(app.mode)}` : ""}</small>
                 </span>
-                <span class="action-btns">${renderRowActions(app)}</span>
+                <span class="action-btns">${
+                  app.meetingLink
+                    ? `<a class="act-btn complete" href="${escapeHtml(app.meetingLink)}" target="_blank" rel="noopener noreferrer"><i class="material-icons">videocam</i><span>Join</span></a>`
+                    : ""
+                }${renderRowActions(app)}</span>
               </li>`,
                 )
                 .join("")}</ul>`
@@ -289,6 +303,13 @@ export function renderDecisionBody(app, status, slotOptions) {
           )
           .join("")}
       </select>
+      ${
+        isOnlineSession(app)
+          ? `<label class="modal-label" for="decisionLink">Meeting link (Google Meet, Zoom, Teams)</label>
+      <input type="url" id="decisionLink" class="modal-input" placeholder="https://meet.google.com/..." value="${escapeHtml(app.meetingLink || "")}">
+      <p class="modal-hint"><i class="material-icons">videocam</i> The student gets a Join button 10 minutes before the session. You can add or change the link later.</p>`
+          : ""
+      }
       <label class="modal-label" for="decisionNotes">Instructions for the student (optional)</label>
       <textarea id="decisionNotes" class="modal-input" rows="3" placeholder="e.g. Please bring your student ID."></textarea>
       <p class="modal-hint">The student is emailed and notified. The session is also added to your Google Calendar.</p>`

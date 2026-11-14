@@ -59,6 +59,7 @@ create table if not exists public.appointments (
   follow_up             boolean not null default false,
   follow_up_reminded_at timestamptz,
   checked_on_at         timestamptz,
+  meeting_link          text,
   feedback              jsonb,
   check_in              jsonb,
   reminders             jsonb not null default '{}'::jsonb,
@@ -70,6 +71,15 @@ create table if not exists public.appointments (
 );
 -- Columns added after the first release (safe to re-run)
 alter table public.appointments add column if not exists checked_on_at timestamptz;
+alter table public.appointments add column if not exists meeting_link text;
+-- Online-session links must be https (no javascript: or other schemes)
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'appointments_meeting_link_https') then
+    alter table public.appointments add constraint appointments_meeting_link_https
+      check (meeting_link is null or meeting_link ~ '^https://[^\s]+$');
+  end if;
+end $$;
 
 -- No double-booking: one active booking per counselor per slot
 create unique index if not exists appointments_slot_taken
@@ -314,6 +324,7 @@ begin
   new.follow_up := false;
   new.follow_up_reminded_at := null;
   new.checked_on_at := null;
+  new.meeting_link := null;
   new.feedback := null;
   new.decided_at := null;
   new.reminders := '{}'::jsonb;
@@ -340,7 +351,8 @@ begin
      or new.check_in is distinct from old.check_in
      or new.created_at <> old.created_at
      or new.follow_up_reminded_at is distinct from old.follow_up_reminded_at
-     or new.checked_on_at is distinct from old.checked_on_at then
+     or new.checked_on_at is distinct from old.checked_on_at
+     or new.meeting_link is distinct from old.meeting_link then
     raise exception 'Students cannot change this field' using errcode = '42501';
   end if;
 

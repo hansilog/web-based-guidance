@@ -48,6 +48,8 @@ import {
   isRemote,
   getUserById,
   getNotifications,
+  isOnlineSession,
+  joinWindow,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
@@ -375,6 +377,58 @@ function calendarInnerHtml(myApps, { pickable = false, selected = "" } = {}) {
   `;
 }
 
+// --- ONLINE SESSIONS: Join button ---
+
+const timeOf = (date) =>
+  date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+function joinLabel(state, opens) {
+  if (state === "early") return `Join opens at ${timeOf(opens)}`;
+  if (state === "over") return "Session time has ended";
+  return "Join session";
+}
+
+// The button exists from approval; it only becomes clickable in its window
+function joinHtml(app) {
+  if (!isOnlineSession(app)) return "";
+  const win = joinWindow(app);
+  if (!win) {
+    return `<p class="join-wait"><i class="material-icons" aria-hidden="true">videocam</i> Online session. Your counselor will add the meeting link before it starts.</p>`;
+  }
+  const waiting = win.state !== "open";
+  return `
+    <a class="join-btn ${waiting ? "is-waiting" : ""}" href="${escapeHtml(app.meetingLink)}"
+       target="_blank" rel="noopener noreferrer"
+       data-opens="${win.opens.toISOString()}" data-closes="${win.closes.toISOString()}"
+       ${waiting ? 'aria-disabled="true" tabindex="-1"' : ""}>
+      <i class="material-icons" aria-hidden="true">videocam</i>
+      <span>${joinLabel(win.state, win.opens)}</span>
+    </a>`;
+}
+
+// Re-check every Join button each 30 seconds so it unlocks on time
+function refreshJoinButtons() {
+  const now = new Date();
+  document.querySelectorAll(".join-btn[data-opens]").forEach((btn) => {
+    const opens = new Date(btn.dataset.opens);
+    const closes = new Date(btn.dataset.closes);
+    let state = "open";
+    if (now < opens) state = "early";
+    else if (now > closes) state = "over";
+    const waiting = state !== "open";
+    btn.classList.toggle("is-waiting", waiting);
+    if (waiting) {
+      btn.setAttribute("aria-disabled", "true");
+      btn.setAttribute("tabindex", "-1");
+    } else {
+      btn.removeAttribute("aria-disabled");
+      btn.removeAttribute("tabindex");
+    }
+    btn.querySelector("span").textContent = joinLabel(state, opens);
+  });
+}
+let joinTimer = null;
+
 export function renderRightSidebar(
   myApps,
   { pickable = false, selected = "" } = {},
@@ -394,6 +448,7 @@ export function renderRightSidebar(
                     <div class="next-app-info">
                         <h2>${formatDate(nextApp.date)}</h2>
                         <p>${formatTime12(nextApp.time)} | ${escapeHtml(nextApp.counselorName || "Guidance Office")}</p>
+                        ${joinHtml(nextApp)}
 
                         <button class="gcal-sync-btn"
                                 data-date="${nextApp.date}"
@@ -1463,6 +1518,12 @@ export function attachAppointmentActions(session) {
 
   // Assign (not add) so re-rendering never stacks duplicate handlers
   container.onclick = (e) => {
+    // A Join button outside its time window does nothing
+    if (e.target.closest('.join-btn[aria-disabled="true"]')) {
+      e.preventDefault();
+      return;
+    }
+
     const waitBtn = e.target.closest(".waitlist-leave, .waitlist-book");
     if (waitBtn) {
       const entry = getMyWaitlist(session.id).find(
@@ -1699,6 +1760,9 @@ export function renderStudentView(root, session, onLogout) {
   attachAppointmentActions(session);
   setupBell(session.id);
   initializeFloatingChatboxEngine();
+
+  clearInterval(joinTimer);
+  joinTimer = setInterval(refreshJoinButtons, 30000);
 
   listenForRealTimeUpdates(() => {
     const broadcastSlot = document.getElementById("broadcast-slot");

@@ -256,3 +256,49 @@ body.student-portal .data-card .primary-btn {
   display: inline-flex;
   margin-top: 16px;
 }
+
+/* --- Online sessions: Join button in the Next session card --- */
+body.student-portal .join-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--c-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+body.student-portal .join-btn:hover {
+  background: var(--c-sky);
+}
+body.student-portal .join-btn:focus-visible {
+  outline: 2px solid #8fb4ea;
+  outline-offset: 2px;
+}
+body.student-portal .join-btn .material-icons {
+  color: var(--c-blue);
+  font-size: 20px;
+}
+body.student-portal .join-btn.is-waiting {
+  background: rgba(255, 255, 255, 0.12);
+  color: #d3dfef;
+  cursor: default;
+  pointer-events: none;
+}
+body.student-portal .join-btn.is-waiting .material-icons {
+  color: #a9bedb;
+}
+body.student-portal .join-wait {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 4px;
+  color: #d3dfef;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+body.student-portal .join-wait .material-icons {
+  font-size: 18px;
+}

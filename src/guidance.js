@@ -23,6 +23,7 @@ import {
   toDateStr,
   getConcerns,
   updateConcern,
+  isMeetingLink,
   getBroadcasts,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
@@ -234,6 +235,16 @@ function openDecisionModal(app, status) {
           showError("You already have another session at that time.");
           return false;
         }
+        // Online sessions: an https meeting link (optional, can be added later)
+        const linkInput = card.querySelector("#decisionLink");
+        const link = linkInput ? linkInput.value.trim() : "";
+        if (link && !isMeetingLink(link)) {
+          showError(
+            "The meeting link must start with https:// (copy it from Google Meet or Zoom).",
+          );
+          return false;
+        }
+        if (linkInput) changes.meetingLink = link || null;
         // Approving an unassigned request makes it yours
         Object.assign(changes, {
           time,
@@ -247,7 +258,7 @@ function openDecisionModal(app, status) {
       addNotification(
         updated.studentId,
         isApprove
-          ? `Your ${updated.type} session on ${when} was approved by ${currentSession.name}.${notes ? ` Note: ${notes}` : ""}`
+          ? `Your ${updated.type} session on ${when} was approved by ${currentSession.name}.${updated.meetingLink ? " It's online: use the Join button on your Dashboard, 10 minutes before it starts." : ""}${notes ? ` Note: ${notes}` : ""}`
           : `Your ${updated.type} request for ${when} was not approved. Reason: ${notes}`,
       );
       window.logActivity(
@@ -257,7 +268,13 @@ function openDecisionModal(app, status) {
 
       refreshCurrentView();
       if (isApprove) await addToGoogleCalendar(updated, notes);
-      emailStudent(updated, status, notes);
+      emailStudent(
+        updated,
+        status,
+        [notes, updated.meetingLink && `Meeting link: ${updated.meetingLink}`]
+          .filter(Boolean)
+          .join(" | "),
+      );
       return true;
     },
   });
@@ -412,6 +429,41 @@ function openCaseFile(studentId) {
     },
   });
   window.logActivity(currentSession, `Opened case file of ${student.name}`);
+}
+
+// Add or change the meeting link of an approved online session
+function openLinkModal(app) {
+  openModal({
+    title: app.meetingLink ? "Edit Meeting Link" : "Add Meeting Link",
+    icon: "videocam",
+    confirmText: "Save Link",
+    bodyHtml: `
+      <p class="modal-lead"><strong>${escapeHtml(app.studentName)}</strong> · ${escapeHtml(app.type)}<br>
+      ${formatDateShort(app.date)}, ${formatTime12(app.time)} · Online</p>
+      <label class="modal-label" for="meetingLinkInput">Meeting link (Google Meet, Zoom, Teams)</label>
+      <input type="url" id="meetingLinkInput" class="modal-input" placeholder="https://meet.google.com/..." value="${escapeHtml(app.meetingLink || "")}">
+      <p class="modal-hint"><i class="material-icons">notifications</i> The student is notified and gets a Join button 10 minutes before the session.</p>`,
+    onConfirm: ({ card, showError }) => {
+      const link = card.querySelector("#meetingLinkInput").value.trim();
+      if (!isMeetingLink(link)) {
+        showError(
+          "Paste the full meeting link, starting with https:// (copy it from Google Meet or Zoom).",
+        );
+        return false;
+      }
+      const updated = updateAppointment(app.id, { meetingLink: link });
+      addNotification(
+        updated.studentId,
+        `Your online ${updated.type} session on ${formatDateShort(updated.date)}, ${formatTime12(updated.time)} has a meeting link. Use the Join button on your Dashboard, 10 minutes before it starts.`,
+      );
+      window.logActivity(
+        currentSession,
+        `Set the meeting link for ${updated.studentName}'s session on ${updated.date}`,
+      );
+      refreshCurrentView();
+      return true;
+    },
+  });
 }
 
 // "Students to check on": send a caring message and record the outreach
@@ -1016,6 +1068,8 @@ function setupAdminListeners(onLogout) {
       const { action } = actBtn.dataset;
       if (action === "approved" || action === "rejected") {
         openDecisionModal(app, action);
+      } else if (action === "link") {
+        openLinkModal(app);
       } else {
         openCloseModal(app, action);
       }
