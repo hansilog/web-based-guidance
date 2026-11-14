@@ -3,8 +3,8 @@
    Look of the guidance counselor portal only (.guidance-portal,
    plus body.counselor-portal for dialogs added to <body>).
    Navy sidebar, quiet paper background, thin borders instead of
-   floating shadows, Public Sans for the interface and Source Serif 4
-   for the greeting and section titles.
+   floating shadows, Figtree throughout (headings are heavier, not a
+   different face).
    ========================================================= */
 
 body.counselor-portal {
@@ -21,8 +21,9 @@ body.counselor-portal {
   --c-amber: #8a5300;
   --c-red: #b42318;
   --c-green: #1f6b3f;
-  --c-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --c-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --c-ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Headings use the same family, heavier */
+  --c-heading: var(--c-ui);
   background: var(--c-paper);
 }
 
@@ -80,9 +81,9 @@ body.counselor-portal .custom-modal-overlay textarea {
 }
 .guidance-portal .brand-name {
   color: #fff;
-  font-family: var(--c-serif);
+  font-family: var(--c-heading);
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0;
 }
 .guidance-portal .system-tag {
@@ -176,10 +177,10 @@ body.counselor-portal .custom-modal-overlay textarea {
 }
 .guidance-portal .view-header h1 {
   color: var(--c-ink);
-  font-family: var(--c-serif);
-  font-size: clamp(1.6rem, 2.6vw, 2.15rem);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: var(--c-heading);
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .guidance-portal .header-greeting {
   margin-top: 4px;
@@ -277,8 +278,8 @@ body.counselor-portal .custom-modal-overlay textarea {
 .guidance-portal .admin-card .card-header h2,
 .guidance-portal .settings-card .card-header h2 {
   color: var(--c-ink);
-  font-family: var(--c-serif);
-  font-weight: 600;
+  font-family: var(--c-heading);
+  font-weight: 700;
   letter-spacing: 0;
 }
 .guidance-portal .overview-panel h3 {
@@ -572,7 +573,7 @@ body.counselor-portal .app-modal-card {
 }
 body.counselor-portal .custom-modal-header h3 {
   color: var(--c-ink);
-  font-family: var(--c-serif);
+  font-family: var(--c-heading);
   font-weight: 600;
 }
 body.counselor-portal .modal-icon {
