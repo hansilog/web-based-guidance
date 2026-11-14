@@ -1,4 +1,5 @@
 import emailjs from "@emailjs/browser";
+import schoolLogo from "./assets/school-logo-128.png";
 import "./styles/guidance.css";
 import {
   listenForRealTimeUpdates,
@@ -701,7 +702,7 @@ export function renderGuidanceView(root, session, onLogout) {
         <aside class="sidebar" id="admin-sidebar">
             <div class="sidebar-header">
                 <div class="brand">
-                    <i class="material-icons" aria-hidden="true">school</i>
+                    <img class="brand-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="36" height="36">
                     <div class="brand-info">
                         <span class="brand-name">Granby Gateway</span>
                         <span class="system-tag">Guidance Office</span>

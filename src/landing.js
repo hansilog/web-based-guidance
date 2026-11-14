@@ -1,3 +1,4 @@
+import schoolLogo from "./assets/school-logo-128.png";
 import "./styles/landing.css";
 import { escapeHtml } from "./syncUtil.js";
 import { openModal } from "./ui.js";
@@ -170,7 +171,7 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
         <div class="landing-page">
             <nav class="glass-nav">
                 <div class="logo">
-                    <i class="material-icons">gavel</i>
+                    <img class="landing-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="36" height="36">
                     <span>Granby Colleges of Science and Technology</span>
                 </div>
                 <button class="nav-login" id="navLoginBtn">Sign In</button>

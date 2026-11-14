@@ -251,3 +251,13 @@ body.admin-portal {
     transition: none !important;
   }
 }
+
+/* --- School seal in the sidebars --- */
+.brand-logo {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}

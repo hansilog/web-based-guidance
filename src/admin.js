@@ -1,3 +1,4 @@
+import schoolLogo from "./assets/school-logo-128.png";
 import { hashPassword, escapeHtml } from "./syncUtil.js";
 import { createCounselor, sendResetEmail } from "./remote.js";
 import {
@@ -409,7 +410,7 @@ export function renderAdminView(root, session, onLogout) {
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="portal-brand">
-                    <i class="material-icons" aria-hidden="true">admin_panel_settings</i>
+                    <img class="brand-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="36" height="36">
                     <div class="portal-brand-text">
                         <span class="portal-brand-name">Granby Gateway</span>
                         <span class="portal-brand-role">Administrator</span>

@@ -1,4 +1,5 @@
 import emailjs from "@emailjs/browser";
+import schoolLogo from "./assets/school-logo.png";
 import { hashPassword } from "./syncUtil.js";
 import { findUserByEmail, updateUser } from "./store.js";
 import { isRemote, sendResetLink, setNewPassword } from "./remote.js";
@@ -38,7 +39,9 @@ export function renderLoginPage(
         <div class="auth-card glass-card" id="authCard">
           <div id="authContent">
             <div class="brand-section">
-              <h1><i class="material-icons">assignment_ind</i> Granby Gateway</h1>
+              <img class="auth-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="88" height="88">
+              <span class="auth-school">Granby Colleges of Science and Technology</span>
+              <h1>Granby Gateway</h1>
               <p id="authSubtitle">${subtitle}</p>
             </div>
             
@@ -343,7 +346,9 @@ export function renderSetNewPassword(root, onDone) {
     <div class="auth-container">
       <div class="auth-card glass-card">
         <div class="brand-section">
-          <h1><i class="material-icons">assignment_ind</i> Granby Gateway</h1>
+          <img class="auth-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="88" height="88">
+              <span class="auth-school">Granby Colleges of Science and Technology</span>
+              <h1>Granby Gateway</h1>
           <p>Choose a new password</p>
         </div>
         <div id="authError" class="error-banner hidden"></div>

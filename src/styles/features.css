@@ -587,3 +587,26 @@
 .holiday-list li.past {
   opacity: 0.55;
 }
+
+/* --- School seal on the landing page and sign-in card --- */
+.landing-logo {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.auth-logo {
+  display: block;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+}
+.auth-school {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
