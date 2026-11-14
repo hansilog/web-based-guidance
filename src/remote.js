@@ -80,6 +80,7 @@ export const COLLECTIONS = {
       ["counselorNotes", "counselor_notes"],
       ["followUp", "follow_up"],
       ["followUpRemindedAt", "follow_up_reminded_at"],
+      ["checkedOnAt", "checked_on_at"],
       ["feedback", "feedback"],
       ["checkIn", "check_in"],
       ["reminders", "reminders"],
@@ -427,8 +428,9 @@ export function createSync(client, { onError, onChange } = {}) {
         if (pending.get(key) === 0 && refetchWhenIdle.has(key)) {
           refetchWhenIdle.delete(key);
           try {
+            const before = JSON.stringify(cache.get(key));
             await fetchKey(key);
-            notify(key);
+            if (JSON.stringify(cache.get(key)) !== before) notify(key);
           } catch {
             // Offline: the next realtime event or focus will retry
           }
@@ -461,9 +463,12 @@ export function createSync(client, { onError, onChange } = {}) {
       await Promise.all(keys.map(fetchKey));
       return keys;
     },
+    // Re-fetch; redraw screens only when the data really changed, so a
+    // refresh never swaps out the button someone is clicking
     async refresh(key) {
+      const before = JSON.stringify(cache.get(key));
       await fetchKey(key);
-      notify(key);
+      if (JSON.stringify(cache.get(key)) !== before) notify(key);
     },
     keysForTable: (table) => TABLE_TO_KEYS[table] || [],
     // Wait for every queued save (used by tests and before sign-out)
@@ -543,7 +548,13 @@ export async function loadAll(profile) {
   // and catch up on everything when the tab comes back into view
   clearInterval(pollTimer);
   pollTimer = setInterval(() => refreshSoon("gh_booked_slots"), 30000);
-  window.addEventListener("focus", () => keys.forEach(refreshSoon));
+  // Catch up when the tab comes back, at most every 30 seconds
+  let lastFocusRefresh = Date.now();
+  window.addEventListener("focus", () => {
+    if (Date.now() - lastFocusRefresh < 30000) return;
+    lastFocusRefresh = Date.now();
+    keys.forEach(refreshSoon);
+  });
 }
 
 // --- 5. ACCOUNTS (Supabase Auth) ---
