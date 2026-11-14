@@ -204,9 +204,43 @@ test("reminders: day-before once, then hour-before", () => {
   assert.deepEqual(saved.reminders, { day: true, hour: true });
 });
 
-test("reminders: pending, past and walk-in sessions are skipped", () => {
+test("reminders: pending requests past their time expire and notify the student", () => {
+  const past = new Date(Date.now() - 3 * 3600000);
   store.saveAppointments([
-    { ...base, id: 900, status: "pending", date: weekday(0) },
+    {
+      ...base,
+      id: 950,
+      studentId: 1,
+      status: "pending",
+      date: store.toDateStr(past),
+      time: `${String(past.getHours()).padStart(2, "0")}:00`,
+    },
+    {
+      ...base,
+      id: 951,
+      studentId: 1,
+      status: "pending",
+      date: weekday(5),
+      time: "10:00",
+    },
+  ]);
+  const before = store.getNotifications(1).length;
+  runReminders();
+  const [expired, future] = store.getAppointments();
+  assert.equal(expired.status, "rejected");
+  assert.match(expired.counselorNotes, /expired/);
+  assert.equal(future.status, "pending");
+  assert.equal(store.getNotifications(1).length, before + 1);
+  assert.match(
+    store.getNotifications(1)[0].message,
+    /expired before a counselor could answer/,
+  );
+});
+
+test("reminders: future pending and walk-in sessions get no reminder", () => {
+  store.saveAppointments([
+    // Still ahead of the check time (10:00 vs 09:30), so not expired either
+    { ...base, id: 900, status: "pending" },
     { ...base, id: 901, walkIn: true, status: "approved" },
   ]);
   assert.equal(

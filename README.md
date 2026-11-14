@@ -51,7 +51,7 @@ our title is web based guidance management and scheduling system.
 
 **Security basics** — data privacy consent at registration, hashed passwords, session re-checked against the user list on every load,
 deactivated accounts blocked, 15-minute idle logout, user input escaped before display,
-5-minute login lockout after 5 wrong passwords, password rules (8+ characters with a letter and a number),
+5-minute login lockout after 5 wrong passwords, at most 3 upcoming sessions and 5 waitlist entries per student, unanswered requests auto-expire at their session time (student notified), no API-key prompts for the AI assistant, password rules (8+ characters with a letter and a number),
 password-reset codes that expire after 10 minutes and allow 5 tries, case-insensitive usernames/emails.
 
 ## Project structure

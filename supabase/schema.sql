@@ -315,6 +315,13 @@ begin
   end if;
   problem := public.slot_problem(new.counselor_id, new.date, new.time);
   if problem <> '' then raise exception '%', problem using errcode = 'P0001'; end if;
+  -- At most 3 upcoming pending/approved sessions per student (no queue flooding)
+  if (select count(*) from public.appointments a
+      where a.student_id = me.id and a.status in ('pending', 'approved')
+        and public.slot_start(a.date, a.time) > now()) >= 3 then
+    raise exception 'You already have 3 upcoming sessions. Attend or cancel one before booking another.'
+      using errcode = 'P0001';
+  end if;
   new.student_name := me.name;
   new.student_email := me.email;
   new.counselor_name := coalesce((select name from public.profiles where id = new.counselor_id), 'Unassigned');
@@ -473,6 +480,51 @@ drop trigger if exists release_day on public.counselor_blocks;
 create trigger release_day after delete on public.counselor_blocks
   for each row execute function public.release_day();
 
+-- Waitlist: at most 5 upcoming entries per student, only for future times
+create or replace function public.guard_waitlist_insert() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.slot_start(new.date, new.time) <= now() then
+    raise exception 'That time has already passed.' using errcode = 'P0001';
+  end if;
+  if (select count(*) from public.waitlist w
+      where w.student_id = new.student_id and public.slot_start(w.date, w.time) > now()) >= 5 then
+    raise exception 'You can wait for up to 5 times at once. Leave one before joining another.'
+      using errcode = 'P0001';
+  end if;
+  new.notified_at := null;
+  return new;
+end $$;
+
+drop trigger if exists guard_waitlist_insert on public.waitlist;
+create trigger guard_waitlist_insert before insert on public.waitlist
+  for each row execute function public.guard_waitlist_insert();
+
+-- Requests nobody answered before their time: close them and tell the student
+create or replace function public.expire_stale_requests() returns int
+language plpgsql security definer set search_path = public as $$
+declare
+  n int;
+begin
+  with expired as (
+    update public.appointments a
+    set status = 'rejected',
+        counselor_notes = 'This request expired because it wasn''t answered before the session time. Please book a new time.',
+        decided_at = now()
+    where a.status = 'pending' and public.slot_start(a.date, a.time) <= now()
+    returning a.student_id, a.type, a.date, a.time
+  ), notes as (
+    insert into public.notifications (user_id, message)
+    select student_id, 'Your ' || type || ' request for ' || to_char(date, 'Mon FMDD') || ', '
+           || to_char(time::time, 'FMHH12:MI AM')
+           || ' expired before a counselor could answer. Please book a new time, or walk in to the guidance office.'
+    from expired
+    returning 1
+  )
+  select count(*) into n from expired;
+  return n;
+end $$;
+
 -- Anonymous reports: force safe defaults, throttle floods, alert counselors
 create or replace function public.guard_concern_insert() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -568,6 +620,9 @@ declare
   n_hour int;
   n_day int;
 begin
+  -- Same 5-minute job also closes requests that were never answered in time
+  perform public.expire_stale_requests();
+
   -- Hour before: student and counselor; also counts as the day-before reminder
   with due as (
     update public.appointments a
@@ -745,6 +800,7 @@ grant execute on function public.username_available(text) to anon;
 grant execute on function public.concern_status(text) to anon;
 grant execute on function public.new_id() to anon;
 revoke execute on function public.send_due_reminders() from authenticated;
+revoke execute on function public.expire_stale_requests() from authenticated;
 revoke execute on function public.notify_waitlist(date, text, bigint) from authenticated;
 
 -- ---------------------------------------------------------------------

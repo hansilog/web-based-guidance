@@ -12,25 +12,15 @@ import { GoogleGenAI } from "@google/genai";
 function getGenAIClient() {
   // 1. When running `npm start`, webpack.dev.js injects the key from .env
   // eslint-disable-next-line no-undef
-  let apiKey = typeof __GEMINI_API_KEY__ !== "undefined" ? __GEMINI_API_KEY__ : "";
+  let apiKey =
+    typeof __GEMINI_API_KEY__ !== "undefined" ? __GEMINI_API_KEY__ : "";
 
-  // 2. Fallback: a key typed into the prompt earlier this browser session
+  // 2. A key set earlier in this tab by the developer (see README)
   if (!apiKey) apiKey = sessionStorage.getItem("gh_gemini_key");
 
-  // 3. Emergency Prompter: If no key is found anywhere, securely prompt the user once
-  if (!apiKey) {
-    apiKey = prompt(
-      "🤖 [Granby Gateway AI Activation]\n\nPlease enter a valid Gemini API Key to initialize the campus chat assistant. This key is stored safely inside your current browser session tab only:",
-    );
-    if (apiKey && apiKey.trim()) {
-      sessionStorage.setItem("gh_gemini_key", apiKey.trim());
-    } else {
-      alert(
-        "❌ Invalid or missing API key. The AI module will remain offline.",
-      );
-      return null;
-    }
-  }
+  // No key: the AI features stay off. Never ask users (students!) to paste
+  // an API key into a pop-up; that teaches people to hand out secrets.
+  if (!apiKey) return null;
 
   // Return a fresh client instance built using the secure key token
   return new GoogleGenAI({ apiKey });
@@ -90,7 +80,7 @@ export async function getPreBookingAdvice(
   // Initialize the client securely at runtime
   const aiClient = getGenAIClient();
   if (!aiClient) {
-    return "⚠️ AI module activation cancelled. Please provide an API key to enable the chatbot assistant.";
+    return "The campus assistant isn't available right now. For questions about counseling, visit the guidance office or book a session.";
   }
 
   try {
@@ -155,7 +145,7 @@ export async function generateStudentSummary(
   // Initialize the client securely at runtime
   const aiClient = getGenAIClient();
   if (!aiClient) {
-    return "⚠️ Summary engine offline. Valid API credentials are required.";
+    return "AI summaries aren't set up on this system. Read the session timeline below instead.";
   }
 
   try {

@@ -698,6 +698,82 @@ await test("meeting links: https only, set by staff, students can't change them"
   assert.equal(rows[0].meeting_link, "https://meet.google.com/abc-defg-hij");
 });
 
+await test("limits: 3 upcoming bookings and 5 waitlist entries per student", async () => {
+  const s = await signUp("limits@x.com", {
+    username: "limits",
+    name: "Lim Its",
+  });
+  const book = (offset, id) =>
+    as(
+      s.authId,
+      `insert into public.appointments (id, student_id, counselor_id, type, date, time)
+                  values ($1, $2, $3, 'Other', $4, '09:00')`,
+      [id, s.id, coun.id, weekday(offset)],
+    );
+  await book(5, 3001);
+  await book(6, 3002);
+  await book(7, 3003);
+  await rejects(book(8, 3004), /3 upcoming sessions/);
+  // Cancelling one frees a place
+  await as(
+    s.authId,
+    "update public.appointments set status = 'cancelled' where id = 3003",
+  );
+  await book(8, 3004);
+
+  const wait = (offset, time) =>
+    as(
+      s.authId,
+      "insert into public.waitlist (student_id, date, time, counselor_id) values ($1, $2, $3, $4)",
+      [s.id, weekday(offset), time, coun.id],
+    );
+  for (const t of ["08:00", "10:00", "11:00", "13:00", "14:00"])
+    await wait(9, t);
+  await rejects(wait(9, "15:00"), /up to 5 times/);
+  await rejects(wait(-30, "10:00"), /already passed/);
+});
+
+await test("unanswered requests expire after their time and the student is told", async () => {
+  await sql("delete from public.notifications");
+  // A pending request whose time has already passed (inserted as the server would)
+  const { rows } = await sql(
+    `select to_char((now() - interval '2 hours') at time zone 'Asia/Manila', 'YYYY-MM-DD') as d,
+            to_char((now() - interval '2 hours') at time zone 'Asia/Manila', 'HH24:MI') as t`,
+  );
+  await sql(
+    `insert into public.appointments (id, student_id, counselor_id, type, date, time, status)
+             values (4001, $1, $2, 'Academic Guidance', $3, $4, 'pending')`,
+    [stu.id, coun.id, rows[0].d, rows[0].t],
+  );
+  const n = (await sql("select public.expire_stale_requests() as n")).rows[0].n;
+  assert.ok(n >= 1);
+  const a = (
+    await sql(
+      "select status, counselor_notes from public.appointments where id = 4001",
+    )
+  ).rows[0];
+  assert.equal(a.status, "rejected");
+  assert.match(a.counselor_notes, /expired/);
+  const note = await sql(
+    "select message from public.notifications where user_id = $1",
+    [stu.id],
+  );
+  assert.ok(
+    note.rows.some((r) =>
+      /expired before a counselor could answer/.test(r.message),
+    ),
+  );
+  // Future pending requests are untouched
+  const future = await sql(
+    "select count(*)::int as n from public.appointments where status = 'pending' and id = 3001",
+  );
+  assert.equal(future.rows[0].n, 1);
+  await rejects(
+    as(stu.authId, "select public.expire_stale_requests()"),
+    /permission denied/,
+  );
+});
+
 await test("deleting a counselor keeps appointments (unassigned)", async () => {
   await as(adm.authId, "delete from public.profiles where id = $1", [coun2.id]);
   const { rows } = await sql(

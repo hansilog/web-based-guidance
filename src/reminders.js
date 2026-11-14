@@ -13,6 +13,10 @@ import {
 } from "./store.js";
 
 const HOUR = 60 * 60 * 1000;
+export const EXPIRED_NOTE =
+  "This request expired because it wasn't answered before the session time. Please book a new time.";
+export const MAX_UPCOMING_BOOKINGS = 3;
+export const MAX_WAITLIST = 5;
 const CHECK_EVERY_MS = 60 * 1000;
 
 function whenText(app) {
@@ -50,6 +54,17 @@ export function runReminders(now = new Date()) {
   const due = [];
 
   const updated = apps.map((app) => {
+    // A request nobody answered before its time is closed, and the student told
+    if (app.status === "pending" && appointmentStart(app) <= now) {
+      due.push({ app, kind: "expired" });
+      return {
+        ...app,
+        status: "rejected",
+        counselorNotes: EXPIRED_NOTE,
+        decidedAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+    }
     if (app.status !== "approved" || app.walkIn) return app;
     const msLeft = appointmentStart(app) - now;
     if (msLeft <= 0) return app;
@@ -73,7 +88,12 @@ export function runReminders(now = new Date()) {
 
   due.forEach(({ app, kind }) => {
     const who = app.counselorName || "your counselor";
-    if (kind === "hour") {
+    if (kind === "expired") {
+      addNotification(
+        app.studentId,
+        `Your ${app.type} request for ${whenText(app)} expired before a counselor could answer. Please book a new time, or walk in to the guidance office.`,
+      );
+    } else if (kind === "hour") {
       addNotification(
         app.studentId,
         `Starting soon: your ${app.type} session with ${who} is at ${formatTime12(app.time)} today.`,

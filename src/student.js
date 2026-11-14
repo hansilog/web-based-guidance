@@ -55,6 +55,7 @@ import {
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
 import { renderWellbeing } from "./wellbeing.js";
+import { MAX_UPCOMING_BOOKINGS, MAX_WAITLIST } from "./reminders.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -1170,6 +1171,12 @@ function attachBookingListener(session) {
     const btn = e.target.closest(".waitlist-btn:not([disabled])");
     if (!btn) return;
     const counselorKey = parseCounselorValue(counselorSelect.value);
+    if (getMyWaitlist(session.id).length >= MAX_WAITLIST) {
+      showError(
+        `You can wait for up to ${MAX_WAITLIST} times at once. Leave one on your Dashboard before joining another.`,
+      );
+      return;
+    }
     const joined = joinWaitlist({
       studentId: session.id,
       date: dateInput.value,
@@ -1240,6 +1247,15 @@ function attachBookingListener(session) {
     if (hasOtherActiveOnDate(session, date)) {
       return showError(
         "You already have a pending or approved appointment on this date. Reschedule that one instead.",
+      );
+    }
+    // Same limit the database enforces: keeps one student from filling the queue
+    const upcoming = getMyApps(session).filter(
+      (a) => ACTIVE_STATUSES.includes(a.status) && isUpcoming(a),
+    ).length;
+    if (upcoming >= MAX_UPCOMING_BOOKINGS) {
+      return showError(
+        `You already have ${MAX_UPCOMING_BOOKINGS} upcoming sessions. Attend or cancel one before booking another.`,
       );
     }
 
