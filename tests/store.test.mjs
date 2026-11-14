@@ -399,6 +399,33 @@ test("insights: more than 6 concern types fold into 'Other types'", () => {
   assert.equal(d.concerns[5].count, 3);
 });
 
+test("insights: 'Other: ...' requests count together as Other", () => {
+  const day = store.toDateStr(new Date(Date.now() - 86400000));
+  store.saveAppointments(
+    [
+      "Other: Transferring schools",
+      "Other: Dorm problems",
+      "Academic Guidance",
+    ].map((type, i) => ({
+      id: 300 + i,
+      counselorId: 2,
+      studentId: 1,
+      type,
+      date: day,
+      time: "09:00",
+      status: "pending",
+    })),
+  );
+  const d = computeInsights(2, 30);
+  assert.deepEqual(
+    d.concerns.map((c) => [c.type, c.count]),
+    [
+      ["Other", 2],
+      ["Academic Guidance", 1],
+    ],
+  );
+});
+
 test("insights: clean axis ticks and Monday weeks", () => {
   assert.deepEqual(testHelpers.niceTicks(5), [0, 2, 4, 6]);
   assert.deepEqual(testHelpers.niceTicks(23), [0, 10, 20, 30]);

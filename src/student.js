@@ -655,11 +655,16 @@ export function renderBookingForm(session = {}) {
     );
   }
 
+  // A follow-up to an "Other: ..." session reopens with Other and its text filled in
+  const prefillOther = String(prefill.type || "").startsWith("Other: ")
+    ? prefill.type.slice("Other: ".length)
+    : "";
+  const selectedType = prefillOther ? "Other" : prefill.type;
   const typeOptions = [
     `<option value="">Select a reason...</option>`,
     ...COUNSELING_TYPES.map(
       (t) =>
-        `<option value="${t}" ${prefill.type === t ? "selected" : ""}>${t}</option>`,
+        `<option value="${t}" ${selectedType === t ? "selected" : ""}>${t}</option>`,
     ),
   ].join("");
 
@@ -696,6 +701,14 @@ export function renderBookingForm(session = {}) {
                             <select id="appType" required>
                                 ${typeOptions}
                             </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row ${selectedType === "Other" ? "" : "hidden"}" id="otherTypeRow">
+                        <div class="form-group">
+                            <label for="appOtherType">Please specify</label>
+                            <input type="text" id="appOtherType" maxlength="60" value="${escapeHtml(prefillOther)}"
+                                   placeholder="e.g. Transferring schools, adjusting to college life">
                         </div>
                     </div>
 
@@ -1111,17 +1124,14 @@ function attachBookingListener(session) {
 
   const typeSelect = document.getElementById("appType");
   const notesInput = document.getElementById("appNotes");
-  const notesLabel = document.getElementById("appNotesLabel");
-  const updateNotesLabel = () => {
+  const otherRow = document.getElementById("otherTypeRow");
+  const otherInput = document.getElementById("appOtherType");
+  // "Other" opens a box to say what the concern is about
+  typeSelect.onchange = () => {
     const isOther = typeSelect.value === "Other";
-    notesLabel.textContent = isOther
-      ? "Describe your concern (Required)"
-      : "Additional Notes (Optional)";
-    notesInput.placeholder = isOther
-      ? "Tell us what you'd like to talk about..."
-      : "Briefly describe your concern...";
+    otherRow.classList.toggle("hidden", !isOther);
+    if (isOther) otherInput.focus();
   };
-  typeSelect.onchange = updateNotesLabel;
 
   const urgentInput = document.getElementById("appUrgent");
   const urgentHelp = document.getElementById("urgentHelp");
@@ -1207,15 +1217,21 @@ function attachBookingListener(session) {
     errorBanner.classList.add("hidden");
 
     const counselorKey = parseCounselorValue(counselorSelect.value);
-    const type = typeSelect.value;
+    let type = typeSelect.value;
     const date = dateInput.value;
     const time = timeInput.value;
     const notes = notesInput.value.trim();
 
     if (!counselorKey) return showError("Please choose a counselor.");
     if (!type) return showError("Please choose a counseling type.");
-    if (type === "Other" && !notes) {
-      return showError("Please describe your concern in the notes box.");
+    if (type === "Other") {
+      const specify = otherInput.value.trim().replace(/\s+/g, " ");
+      if (specify.length < 3) {
+        otherInput.focus();
+        return showError("Please tell us what your concern is about.");
+      }
+      // Saved as e.g. "Other: Transferring schools" so counselors see it at once
+      type = `Other: ${specify}`;
     }
     const dateProblem = checkDate(date, counselorKey);
     if (dateProblem) return showError(dateProblem);

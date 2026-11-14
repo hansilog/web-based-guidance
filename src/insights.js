@@ -115,7 +115,9 @@ export function computeInsights(counselorId, days, now = new Date()) {
   // Concerns: every request in range, by counseling type, largest first
   const typeCounts = {};
   current.forEach((a) => {
-    typeCounts[a.type] = (typeCounts[a.type] || 0) + 1;
+    // "Other: Transferring schools" etc. count together as "Other"
+    const type = String(a.type || "").startsWith("Other") ? "Other" : a.type;
+    typeCounts[type] = (typeCounts[type] || 0) + 1;
   });
   let concerns = Object.entries(typeCounts)
     .map(([type, count]) => ({ type, count }))
