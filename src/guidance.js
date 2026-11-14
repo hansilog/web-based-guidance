@@ -35,6 +35,7 @@ import {
 import { renderCounselorCalendar } from "./calendarView.js";
 import { renderInsights } from "./insights.js";
 import { getStudentsToCheckOn } from "./checkon.js";
+import { printCaseSummary } from "./caseSummary.js";
 
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
 import {
@@ -49,6 +50,7 @@ import {
   renderLogs,
   renderConcerns,
   formatDateShort,
+  NOTE_TEMPLATES,
 } from "./guidanceView.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
@@ -280,6 +282,29 @@ function openDecisionModal(app, status) {
   });
 }
 
+// Note templates: insert a structure, keeping anything already typed
+function bindNoteTemplates(card) {
+  card.querySelectorAll(".note-template").forEach((btn) => {
+    btn.onclick = () => {
+      const template = NOTE_TEMPLATES.find(
+        (t) => t.key === btn.dataset.template,
+      );
+      const area = card.querySelector(`#${btn.dataset.target}`);
+      if (!template || !area) return;
+      const current = area.value.trim();
+      area.value = current ? `${current}\n\n${template.text}` : template.text;
+      area.focus();
+      // Cursor goes after the first heading so typing can start right away
+      const firstLine = area.value.indexOf(
+        "\n",
+        current ? current.length + 2 : 0,
+      );
+      area.setSelectionRange(firstLine, firstLine);
+      if (!current) area.scrollTop = 0;
+    };
+  });
+}
+
 // Close an approved session that has started: completed or no-show
 function openCloseModal(app, status) {
   const isComplete = status === "completed";
@@ -290,6 +315,7 @@ function openCloseModal(app, status) {
     danger: !isComplete,
     confirmText: isComplete ? "Save & Complete" : "Mark No-show",
     bodyHtml: renderCloseBody(app, status),
+    onOpen: ({ card }) => bindNoteTemplates(card),
     onConfirm: ({ card }) => {
       const caseNotes = card.querySelector("#closeCaseNotes").value.trim();
       const changes = { status, caseNotes };
@@ -334,6 +360,7 @@ function openWalkInModal() {
       toDateStr(now),
       `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
     ),
+    onOpen: ({ card }) => bindNoteTemplates(card),
     onConfirm: ({ card, showError }) => {
       const student = getUserById(
         Number(card.querySelector("#walkInStudent").value),
@@ -412,6 +439,17 @@ function openCaseFile(studentId) {
     wide: true,
     bodyHtml: renderCaseFile(student, apps),
     onOpen: ({ card }) => {
+      card.querySelector("#printSummaryBtn").onclick = () => {
+        const includeNotes = card.querySelector("#printWithNotes").checked;
+        printCaseSummary(student, apps, {
+          includeNotes,
+          printedBy: currentSession.name,
+        });
+        window.logActivity(
+          currentSession,
+          `Printed the case summary of ${student.name}${includeNotes ? " (with case notes)" : ""}`,
+        );
+      };
       const btn = card.querySelector("#aiSummaryBtn");
       const output = card.querySelector("#aiSummaryOutput");
       if (!btn) return;

@@ -321,6 +321,55 @@ export function renderDecisionBody(app, status, slotOptions) {
   `;
 }
 
+// --- Case note templates: one click fills a structure into the notes ---
+// Each template is a list of headings, one per paragraph
+const template = (key, label, headings) => ({
+  key,
+  label,
+  text: `${headings.map((h) => `${h}:`).join("\n\n")}\n`,
+});
+
+export const NOTE_TEMPLATES = [
+  template("general", "Structured", [
+    "Concern",
+    "What we discussed",
+    "Plan",
+    "Next steps",
+  ]),
+  template("academic", "Academic", [
+    "Subjects / issue",
+    "Current standing",
+    "Study plan agreed",
+    "Referral (adviser, tutor)",
+    "Next check-in",
+  ]),
+  template("wellbeing", "Wellbeing", [
+    "Presenting concern",
+    "Mood and stress observed",
+    "Risk check (asked about self-harm; response)",
+    "Coping steps agreed",
+    "Support people / referral",
+    "Next check-in",
+  ]),
+  template("career", "Career", [
+    "Goal or interest",
+    "Options discussed",
+    "Actions for the student",
+    "Resources shared",
+  ]),
+];
+
+function noteTemplatesHtml(targetId) {
+  return `
+    <div class="note-templates" role="group" aria-label="Note templates">
+      <span>Start from a template:</span>
+      ${NOTE_TEMPLATES.map(
+        (t) =>
+          `<button type="button" class="note-template" data-template="${t.key}" data-target="${targetId}">${t.label}</button>`,
+      ).join("")}
+    </div>`;
+}
+
 // Body of the complete / no-show dialog
 export function renderCloseBody(app, status) {
   const isComplete = status === "completed";
@@ -331,7 +380,8 @@ export function renderCloseBody(app, status) {
       isComplete
         ? `
       <label class="modal-label" for="closeCaseNotes">Private case notes</label>
-      <textarea id="closeCaseNotes" class="modal-input" rows="4" placeholder="What was discussed, observations, agreed next steps..."></textarea>
+      ${noteTemplatesHtml("closeCaseNotes")}
+      <textarea id="closeCaseNotes" class="modal-input" rows="6" placeholder="What was discussed, observations, agreed next steps..."></textarea>
       <p class="modal-hint"><i class="material-icons">lock</i> Only guidance counselors can see case notes.</p>
       <label class="modal-label" for="closeMessage">Message to the student (optional)</label>
       <textarea id="closeMessage" class="modal-input" rows="2" placeholder="e.g. Great progress today. Keep the study plan going."></textarea>
@@ -374,7 +424,8 @@ export function renderWalkInBody(students, date, time) {
       </div>
     </div>
     <label class="modal-label" for="walkInNotes">Private case notes</label>
-    <textarea id="walkInNotes" class="modal-input" rows="4" placeholder="What was discussed, observations, agreed next steps..."></textarea>
+    ${noteTemplatesHtml("walkInNotes")}
+    <textarea id="walkInNotes" class="modal-input" rows="6" placeholder="What was discussed, observations, agreed next steps..."></textarea>
     <p class="modal-hint"><i class="material-icons">lock</i> Only guidance counselors can see case notes.</p>
     <label class="modal-check"><input type="checkbox" id="walkInFollowUp"> Recommend a follow-up session</label>
   `;
@@ -397,6 +448,11 @@ export function renderCaseFile(student, apps) {
       <div><span class="case-label">Email</span>${escapeHtml(student.email)}</div>
       <div><span class="case-label">Sessions</span>${count("completed")} completed · ${count("no-show")} no-show · ${count("pending") + count("approved")} active</div>
       <div><span class="case-label">Avg. rating</span>${avg ? `${avg} / 5` : "No ratings yet"}</div>
+    </div>
+
+    <div class="print-summary">
+      <button type="button" id="printSummaryBtn" class="act-btn complete"><i class="material-icons">print</i><span>Print case summary</span></button>
+      <label class="modal-check"><input type="checkbox" id="printWithNotes"> Include private case notes</label>
     </div>
 
     <div class="ai-summary-box">

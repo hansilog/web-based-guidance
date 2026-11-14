@@ -568,4 +568,63 @@ test("online sessions: only https links; Join opens 10 min before, closes after 
   assert.equal(store.joinWindow({ ...app, status: "pending" }), null);
 });
 
+const { NOTE_TEMPLATES } = await load("guidanceView.js");
+const { caseSummaryHtml } = await load("caseSummary.js");
+
+test("note templates: headings separated by blank lines", () => {
+  const general = NOTE_TEMPLATES.find((t) => t.key === "general");
+  assert.equal(
+    general.text,
+    "Concern:\n\nWhat we discussed:\n\nPlan:\n\nNext steps:\n",
+  );
+  assert.deepEqual(
+    NOTE_TEMPLATES.map((t) => t.key),
+    ["general", "academic", "wellbeing", "career"],
+  );
+  assert.ok(
+    NOTE_TEMPLATES.find((t) => t.key === "wellbeing").text.includes(
+      "Risk check",
+    ),
+  );
+});
+
+test("case summary: private notes only when asked, names escaped", () => {
+  const student = {
+    name: "Ana <b>Cruz</b>",
+    course: "BSIT",
+    section: "3A",
+    yearLevel: "3rd Year",
+    email: "ana@x.com",
+  };
+  const apps = [
+    {
+      date: "2026-10-01",
+      time: "09:00",
+      type: "Personal Concern",
+      status: "completed",
+      caseNotes: "SECRET NOTE",
+      counselorName: "Ms. C",
+      followUp: true,
+      feedback: { rating: 4 },
+      checkIn: { level: "High", score: 11, safetyFlag: true },
+    },
+    {
+      date: "2026-10-20",
+      time: "13:00",
+      type: "Academic Guidance",
+      status: "no-show",
+      counselorName: "Ms. C",
+    },
+  ];
+  const plain = caseSummaryHtml(student, apps, { printedBy: "Ms. C" });
+  assert.ok(!plain.includes("SECRET NOTE"), "notes left out by default");
+  assert.ok(plain.includes("Private case notes are not included"));
+  assert.ok(plain.includes("Ana &lt;b&gt;Cruz&lt;/b&gt;"), "name escaped");
+  assert.ok(!plain.includes("<b>Cruz</b>"));
+  assert.ok(plain.includes("1 check-in with a safety flag"));
+  assert.ok(plain.includes("Confidential"));
+  const withNotes = caseSummaryHtml(student, apps, { includeNotes: true });
+  assert.ok(withNotes.includes("SECRET NOTE"));
+});
+
 console.log(`\n${passed} tests passed`);

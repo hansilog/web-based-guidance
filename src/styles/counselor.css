@@ -693,3 +693,66 @@
     align-items: flex-start;
   }
 }
+
+/* --- Case note templates (dialogs) --- */
+body.counselor-portal .note-templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  color: var(--c-muted);
+  font-size: 0.8rem;
+}
+body.counselor-portal .note-template {
+  padding: 4px 10px;
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--c-ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+body.counselor-portal .note-template:hover {
+  background: var(--c-sky);
+}
+body.counselor-portal .note-template:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+/* --- Case file: print summary --- */
+body.counselor-portal .print-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+body.counselor-portal .print-summary .modal-check {
+  margin: 0;
+  font-size: 0.85rem;
+}
+body.counselor-portal .print-summary .act-btn {
+  border: 1px solid var(--c-blue);
+  border-radius: 8px;
+  background: var(--c-blue);
+  color: #fff;
+}
+body.counselor-portal .print-summary .act-btn:hover {
+  background: var(--c-blue-dark);
+}
+
+/* --- Case file: AI summary box in the blue theme (was purple) --- */
+body.counselor-portal .ai-summary-box {
+  border-color: var(--c-line);
+  background: var(--c-paper);
+}
+body.counselor-portal .ai-summary-head {
+  border-bottom-color: var(--c-line);
+  color: var(--c-ink);
+}
+body.counselor-portal .ai-summary-head .material-icons {
+  color: var(--c-blue);
+}
