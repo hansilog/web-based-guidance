@@ -663,3 +663,63 @@
     width: min(100%, 280px);
   }
 }
+
+/* --- Landing: navy header and hero (matches the portal sidebars) --- */
+.landing-page .glass-nav {
+  background: #16325c;
+  backdrop-filter: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.landing-page .logo {
+  color: #fff;
+}
+.landing-page .landing-logo {
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.landing-page .hero {
+  padding-bottom: 72px;
+  background: #16325c;
+  color: #fff;
+}
+.landing-page .hero h1 {
+  color: #fff;
+}
+.landing-page .hero .highlight {
+  color: #8fb4ea;
+}
+.landing-page .hero p {
+  color: #c9d6ea;
+}
+.landing-page .hero .badge {
+  background: rgba(255, 255, 255, 0.12);
+  color: #dce6f5;
+}
+/* Buttons on navy: solid white for Get Started, white outline for Sign In */
+.landing-page .cta-group .btn-primary.cta-btn {
+  background: #fff;
+  color: #16325c;
+  box-shadow: none;
+}
+.landing-page .cta-group .btn-primary.cta-btn:hover {
+  background: #e8f0fb;
+}
+.landing-page .cta-group .btn-secondary.cta-btn {
+  border-color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  color: #fff;
+}
+.landing-page .cta-group .btn-secondary.cta-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.landing-page .cta-btn:focus-visible,
+.landing-page .services-link:focus-visible {
+  outline: 2px solid #8fb4ea;
+  outline-offset: 3px;
+}
+.landing-page .services-link {
+  color: #c9d6ea;
+}
+.landing-page .services-link:hover {
+  color: #fff;
+}
