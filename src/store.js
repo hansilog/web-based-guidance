@@ -189,6 +189,14 @@ export const COUNSELING_TYPES = [
 ];
 export const SESSION_MODES = ["In-person", "Online (video call)"];
 
+// A counselor's focus, shown next to their name when students choose one.
+// Built from the counseling types so the two lists always match.
+export const COUNSELOR_SPECIALTIES = [
+  "General Counseling",
+  ...COUNSELING_TYPES.filter((t) => t !== "Other"),
+  "Mental Health & Wellness",
+];
+
 export function toDateStr(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");

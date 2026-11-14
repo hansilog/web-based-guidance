@@ -18,6 +18,7 @@ import {
   parseDate,
   toDateStr,
   ACTIVE_STATUSES,
+  COUNSELOR_SPECIALTIES,
   isRemote,
   getUserById,
   getActivityLogs,
@@ -458,10 +459,7 @@ export function renderAdminView(root, session, onLogout) {
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <label style="font-size: 0.85rem; font-weight: 600; color: #475569;">Specialty / Focus Field</label>
                     <select id="counselorSpecialtyField" style="padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-size: 0.95rem; background: white;">
-                        <option value="General Counseling">General Counseling</option>
-                        <option value="Academic Guidance">Academic Guidance</option>
-                        <option value="Career & Placement">Career & Placement</option>
-                        <option value="Mental Health & Wellness">Mental Health & Wellness</option>
+                        ${COUNSELOR_SPECIALTIES.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}
                     </select>
                 </div>
 
@@ -1083,8 +1081,13 @@ window.openEditCounselorModal = (id) => {
   document.getElementById("counselorIdField").value = targetUser.id;
   document.getElementById("counselorNameField").value = targetUser.name;
   document.getElementById("counselorEmailField").value = targetUser.email;
-  document.getElementById("counselorSpecialtyField").value =
-    targetUser.specialty || "General Counseling";
+  // Keep an older specialty that's no longer in the list instead of blanking it
+  const specialtySelect = document.getElementById("counselorSpecialtyField");
+  const specialty = targetUser.specialty || "General Counseling";
+  if (![...specialtySelect.options].some((o) => o.value === specialty)) {
+    specialtySelect.add(new Option(specialty, specialty));
+  }
+  specialtySelect.value = specialty;
   document.getElementById("counselorPasswordField").value = "";
   document.getElementById("passwordLabel").textContent = isRemote
     ? 'Password (counselors change their own, or use "Forgot Password?")'
