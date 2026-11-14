@@ -13,6 +13,7 @@ our title is web based guidance management and scheduling system.
 - Appointment history, Google Calendar sync, Granby AI campus chat
 - Waitlist for taken times: notified when a spot opens, with "Book now" on the Dashboard
 - Optional 5-question wellbeing check-in at booking; worrying answers mark the request urgent and show crisis hotlines
+- My Wellbeing: the student's own check-in scores over time, latest answers, and where to get help
 - Reminders a day before and an hour before approved sessions (notification, plus email the day before)
 
 **Guidance counselors**
@@ -60,6 +61,7 @@ src/
 ├── reminders.js     # Day-before / hour-before session reminders
 ├── checkin.js       # Wellbeing check-in questions, scoring, and counselor views
 ├── insights.js      # Counselor Insights tab: stat tiles and charts (plain HTML/CSS)
+├── wellbeing.js     # Student My Wellbeing page (reuses the Insights charts)
 ├── ui.js            # Shared dialog + notification bell
 ├── student.js       # Student portal (dashboard, booking, reschedule, rating, history, settings, AI chat)
 ├── guidance.js      # Counselor portal logic

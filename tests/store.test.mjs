@@ -408,4 +408,46 @@ test("insights: clean axis ticks and Monday weeks", () => {
   assert.equal(monday.getDate(), 9);
 });
 
+const { getMyCheckIns } = await load("wellbeing.js");
+
+test("my wellbeing: only my check-ins, oldest first", () => {
+  const ci = (score, level) => ({ answers: [1, 1, 1, 0, 0], score, level });
+  store.saveAppointments([
+    {
+      id: 1,
+      studentId: 1,
+      type: "A",
+      date: "2026-10-05",
+      time: "09:00",
+      checkIn: ci(8, "Moderate"),
+    },
+    {
+      id: 2,
+      studentId: 1,
+      type: "B",
+      date: "2026-09-01",
+      time: "09:00",
+      checkIn: ci(3, "Low"),
+    },
+    { id: 3, studentId: 1, type: "C", date: "2026-10-10", time: "09:00" }, // no check-in
+    {
+      id: 4,
+      studentId: 99,
+      type: "D",
+      date: "2026-10-01",
+      time: "09:00",
+      checkIn: ci(12, "High"),
+    },
+  ]);
+  const mine = getMyCheckIns(1);
+  assert.deepEqual(
+    mine.map((c) => [c.date, c.score, c.level]),
+    [
+      ["2026-09-01", 3, "Low"],
+      ["2026-10-05", 8, "Moderate"],
+    ],
+  );
+  assert.equal(getMyCheckIns(5).length, 0);
+});
+
 console.log(`\n${passed} tests passed`);

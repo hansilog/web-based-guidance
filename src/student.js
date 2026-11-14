@@ -49,6 +49,7 @@ import {
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
+import { renderWellbeing } from "./wellbeing.js";
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
@@ -1471,6 +1472,7 @@ function rerenderCurrentView(session) {
 
   if (target === "dashboard") content.innerHTML = renderDashboard(session);
   else if (target === "records") content.innerHTML = renderHistory(session);
+  else if (target === "wellbeing") renderWellbeing(content, session);
   else if (target === "book" && refreshBookingSlots) refreshBookingSlots();
 }
 
@@ -1591,6 +1593,9 @@ export function renderStudentView(root, session, onLogout) {
                 </button>
                 <button class="nav-item" data-target="records">
                     <i class="material-icons">history</i> My History
+                </button>
+                <button class="nav-item" data-target="wellbeing">
+                    <i class="material-icons">favorite_border</i> My Wellbeing
                 </button>
                 <button class="nav-item" data-target="settings">
                     <i class="material-icons">settings</i> Settings
@@ -1834,6 +1839,8 @@ export function setupStudentListeners(onLogout, session) {
         attachBookingListener(session);
       } else if (target === "records") {
         content.innerHTML = renderHistory(session);
+      } else if (target === "wellbeing") {
+        renderWellbeing(content, session);
       } else if (target === "settings") {
         renderSettings(content, session);
       }

@@ -22,7 +22,7 @@ const OUTCOMES = [
 ];
 
 // Check-in levels: one blue ramp, light → dark (validated as ordinal)
-const LEVELS = [
+export const LEVELS = [
   { level: "Low", color: "#86b6ef" },
   { level: "Moderate", color: "#2a78d6" },
   { level: "High", color: "#104281" },
@@ -181,11 +181,11 @@ export function computeInsights(counselorId, days, now = new Date()) {
 
 // --- pieces ---
 
-function tipAttrs(title, value) {
+export function tipAttrs(title, value) {
   return `data-tip-title="${escapeHtml(title)}" data-tip-value="${escapeHtml(value)}"`;
 }
 
-function statTile(label, value, sub, delta = "") {
+export function statTile(label, value, sub, delta = "") {
   return `
     <div class="ins-tile">
       <span class="ins-tile-label">${escapeHtml(label)}</span>
@@ -204,7 +204,7 @@ function sessionsDelta(now, before, days) {
   return `<span class="ins-delta ${up ? "up" : "down"}"><i class="material-icons" aria-hidden="true">${up ? "arrow_upward" : "arrow_downward"}</i>${up ? "+" : "−"}${Math.abs(diff)} vs previous ${days} days</span>`;
 }
 
-function tableView(caption, head, rows) {
+export function tableView(caption, head, rows) {
   return `
     <details class="ins-table">
       <summary>Show as table</summary>
@@ -222,12 +222,16 @@ function tableView(caption, head, rows) {
 }
 
 // Column chart; each column is a stack of { value, color } segments
-function columnChart(columns, { ariaLabel, maxLabels = 8 }) {
+// Pass `ticks` for a fixed axis (e.g. a 0–15 score); otherwise it fits the data.
+export function columnChart(
+  columns,
+  { ariaLabel, maxLabels = 8, ticks: fixedTicks = null },
+) {
   const max = Math.max(
     ...columns.map((c) => c.segments.reduce((s, x) => s + x.value, 0)),
     0,
   );
-  const ticks = niceTicks(max);
+  const ticks = fixedTicks || niceTicks(max);
   const top = ticks[ticks.length - 1];
   const every = Math.ceil(columns.length / maxLabels);
   // Label only the highest column (latest if tied) and the last one
@@ -275,7 +279,7 @@ function columnChart(columns, { ariaLabel, maxLabels = 8 }) {
     </div>`;
 }
 
-function legend(items) {
+export function legend(items) {
   return `<ul class="ins-legend">${items
     .map(
       (i) =>
@@ -284,7 +288,7 @@ function legend(items) {
     .join("")}</ul>`;
 }
 
-function card(title, subtitle, body, extraClass = "") {
+export function card(title, subtitle, body, extraClass = "") {
   return `
     <section class="ins-card ${extraClass}">
       <h3>${escapeHtml(title)}</h3>
@@ -456,7 +460,7 @@ export function renderInsights(container, session, rangeKey) {
 }
 
 // One tooltip for the page; text set with textContent
-function bindTooltip(container) {
+export function bindTooltip(container) {
   const page = container.querySelector(".ins-page");
   const tip = container.querySelector(".ins-tip");
   if (!page || !tip) return;
