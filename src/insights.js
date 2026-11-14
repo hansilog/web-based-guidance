@@ -358,12 +358,11 @@ export function renderInsights(container, session, rangeKey) {
             <span class="ins-bar-value">${c.count}</span>
           </li>`,
           )
-          .join("")}</ul>` +
-          tableView(
-            "Most common concerns",
-            ["Counseling type", "Requests"],
-            d.concerns.map((c) => [c.type, String(c.count)]),
-          )
+          .join("")}</ul>${tableView(
+          "Most common concerns",
+          ["Counseling type", "Requests"],
+          d.concerns.map((c) => [c.type, String(c.count)]),
+        )}`
       : `<p class="ins-empty">No requests in this period.</p>`,
   );
 
@@ -381,16 +380,15 @@ export function renderInsights(container, session, rangeKey) {
                     ${tipAttrs(o.label, `${o.count} (${share}%)`)}
                     aria-label="${escapeHtml(`${o.label}: ${o.count}, ${share}%`)}">${share >= 12 ? `${share}%` : ""}</span>`;
           })
-          .join("")}</div>${legend(d.outcomes)}` +
-          tableView(
-            "How sessions ended",
-            ["Outcome", "Sessions", "Share"],
-            d.outcomes.map((o) => [
-              o.label,
-              String(o.count),
-              `${pct(o.count, closed)}%`,
-            ]),
-          )
+          .join("")}</div>${legend(d.outcomes)}${tableView(
+          "How sessions ended",
+          ["Outcome", "Sessions", "Share"],
+          d.outcomes.map((o) => [
+            o.label,
+            String(o.count),
+            `${pct(o.count, closed)}%`,
+          ]),
+        )}`
       : `<p class="ins-empty">Nothing closed in this period yet.</p>`,
   );
 
@@ -496,4 +494,4 @@ function bindTooltip(container) {
 }
 
 // Exposed for tests
-export const _internals = { niceTicks, mondayOf, weeksBetween };
+export const testHelpers = { niceTicks, mondayOf, weeksBetween };

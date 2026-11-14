@@ -307,7 +307,7 @@ test("broadcasts are stored newest first", () => {
   assert.equal(store.getBroadcasts()[0].message, "second");
 });
 
-const { computeInsights, _internals } = await load("insights.js");
+const { computeInsights, testHelpers } = await load("insights.js");
 
 test("insights: tiles count the counselor's own sessions in range", () => {
   const now = new Date();
@@ -400,10 +400,10 @@ test("insights: more than 6 concern types fold into 'Other types'", () => {
 });
 
 test("insights: clean axis ticks and Monday weeks", () => {
-  assert.deepEqual(_internals.niceTicks(5), [0, 2, 4, 6]);
-  assert.deepEqual(_internals.niceTicks(23), [0, 10, 20, 30]);
-  assert.deepEqual(_internals.niceTicks(0), [0, 1]);
-  const monday = _internals.mondayOf(new Date(2026, 10, 14)); // Saturday
+  assert.deepEqual(testHelpers.niceTicks(5), [0, 2, 4, 6]);
+  assert.deepEqual(testHelpers.niceTicks(23), [0, 10, 20, 30]);
+  assert.deepEqual(testHelpers.niceTicks(0), [0, 1]);
+  const monday = testHelpers.mondayOf(new Date(2026, 10, 14)); // Saturday
   assert.equal(monday.getDay(), 1);
   assert.equal(monday.getDate(), 9);
 });
