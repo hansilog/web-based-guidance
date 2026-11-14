@@ -33,6 +33,7 @@ import {
 } from "./remote.js";
 import { renderCounselorCalendar } from "./calendarView.js";
 import { renderInsights } from "./insights.js";
+import { getStudentsToCheckOn } from "./checkon.js";
 
 // 📦 IMPORT THE VIEW COMPONENT FILE CHUNKS
 import {
@@ -155,6 +156,7 @@ export function renderAppointmentsTable() {
       filter: tableFilter,
       today,
       followUps: getFollowUpsDue(),
+      checkOn: getStudentsToCheckOn(currentSession.id),
     }) + generateAppointmentsTableHtml(sorted, tableFilter);
   setupTableSearch();
 
@@ -410,6 +412,37 @@ function openCaseFile(studentId) {
     },
   });
   window.logActivity(currentSession, `Opened case file of ${student.name}`);
+}
+
+// "Students to check on": send a caring message and record the outreach
+function openReachOutModal(appointmentId, studentId) {
+  const student = getUserById(studentId);
+  const name = student?.name || "this student";
+  const first = name.split(" ")[0];
+  openModal({
+    title: `Reach out to ${name}`,
+    icon: "chat",
+    confirmText: "Send Message",
+    bodyHtml: `
+      <p class="modal-lead">${escapeHtml(first)} gets this in their notifications. Keep it short and warm; don't mention check-in answers.</p>
+      <label class="modal-label" for="reachOutText">Message</label>
+      <textarea id="reachOutText" class="modal-input" rows="4">Hi ${escapeHtml(first)}, this is ${escapeHtml(currentSession.name)} from the guidance office. I'd like to check in with you. You can book a time that works for you, or drop by the office any day.</textarea>
+      <p class="modal-hint"><i class="material-icons">lock</i> The student only sees your message, not why they're on this list.</p>`,
+    onConfirm: ({ card, showError }) => {
+      const message = card.querySelector("#reachOutText").value.trim();
+      if (message.length < 10) {
+        showError("Please write a short message to the student.");
+        return false;
+      }
+      addNotification(studentId, message);
+      updateAppointment(appointmentId, {
+        checkedOnAt: new Date().toISOString(),
+      });
+      window.logActivity(currentSession, `Reached out to ${name}`);
+      refreshCurrentView();
+      return true;
+    },
+  });
 }
 
 // Nudge a student through their notification bell to book the follow-up
@@ -950,6 +983,15 @@ function setupAdminListeners(onLogout) {
       const { filter } = statCard.dataset;
       tableFilter = tableFilter === filter ? "all" : filter;
       renderAppointmentsTable();
+      return;
+    }
+
+    const checkOnBtn = e.target.closest(".checkon-btn");
+    if (checkOnBtn) {
+      openReachOutModal(
+        Number(checkOnBtn.dataset.id),
+        Number(checkOnBtn.dataset.student),
+      );
       return;
     }
 

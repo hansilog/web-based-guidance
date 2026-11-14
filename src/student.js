@@ -46,6 +46,8 @@ import {
   syncStudentOnAppointments,
   findUserByEmail,
   isRemote,
+  getUserById,
+  getNotifications,
 } from "./store.js";
 import { openModal, renderBellHtml, setupBell, refreshBell } from "./ui.js";
 import { checkInFormHtml, readCheckIn } from "./checkin.js";
@@ -818,7 +820,21 @@ export function renderSettings(container, session) {
             </button>
         </form>
     </div>
+
+    <div class="settings-card data-card">
+        <div class="card-header">
+            <h2><i class="material-icons">download</i> Your data</h2>
+        </div>
+        <p>Under the Data Privacy Act of 2012 you can get a copy of the personal data Granby Gateway keeps about you: your profile, appointments, check-ins, ratings, notifications and waitlist.</p>
+        <p class="data-note"><i class="material-icons" aria-hidden="true">lock</i> Counselors' private case notes are not included. To request them, ask the guidance office.</p>
+        <button type="button" id="downloadMyData" class="primary-btn">
+            <i class="material-icons">download</i> Download My Data
+        </button>
+    </div>
   `;
+
+  document.getElementById("downloadMyData").onclick = () =>
+    downloadMyData(session);
 
   // Re-attach the submit listener
   const form = document.getElementById("settingsForm");
@@ -869,6 +885,37 @@ export function renderSettings(container, session) {
       alert("Your account could not be found. Please sign in again.");
     }
   };
+}
+
+// Data Privacy Act: everything stored about this student, as a JSON file
+export function buildMyData(session) {
+  const me = getUserById(session.id) || session;
+  const { pass, ...profile } = me;
+  const mine = (list, key = "studentId") =>
+    list.filter((item) => item[key] === session.id);
+  return {
+    about:
+      "Personal data kept about you by Granby Gateway (guidance office). Counselors' private case notes are not included; ask the guidance office to request them.",
+    exportedAt: new Date().toISOString(),
+    profile,
+    appointments: mine(getAppointments()).map(({ caseNotes, ...a }) => a),
+    notifications: getNotifications(session.id),
+    waitlist: getMyWaitlist(session.id),
+  };
+}
+
+function downloadMyData(session) {
+  const blob = new Blob([JSON.stringify(buildMyData(session), null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `granby-my-data-${toDateStr(new Date())}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  window.logActivity(session, "Downloaded their personal data");
 }
 
 function getStatusIcon(status) {

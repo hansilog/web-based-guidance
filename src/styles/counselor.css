@@ -602,3 +602,94 @@
     transition: none !important;
   }
 }
+
+/* --- Students to check on --- */
+.guidance-portal .checkon-panel {
+  margin-bottom: 18px;
+  border-left: 4px solid var(--c-blue);
+}
+.guidance-portal .checkon-panel h3 {
+  flex-wrap: wrap;
+}
+.guidance-portal .checkon-count {
+  margin-left: auto;
+  color: var(--c-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.guidance-portal .checkon-intro {
+  margin: 0 0 6px;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+}
+.guidance-portal .checkon-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.guidance-portal .checkon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--c-line-soft);
+}
+.guidance-portal .checkon-row.reached {
+  opacity: 0.7;
+}
+.guidance-portal .checkon-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.guidance-portal .checkon-main small {
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+.guidance-portal .checkon-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.guidance-portal .checkon-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--c-sky);
+  color: var(--c-ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.guidance-portal .checkon-reason.safety {
+  background: #fde8e7;
+  color: var(--c-red);
+}
+.guidance-portal .checkon-reason .material-icons {
+  font-size: 14px;
+}
+.guidance-portal .checkon-btn {
+  flex-shrink: 0;
+}
+.guidance-portal .checkon-done {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  color: #006300;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.guidance-portal .checkon-done .material-icons {
+  font-size: 16px;
+}
+@media (max-width: 600px) {
+  .guidance-portal .checkon-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

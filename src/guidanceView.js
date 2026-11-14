@@ -67,7 +67,46 @@ function renderRowActions(app) {
 }
 
 // At-a-glance row + today's schedule + follow-ups, shown above the queue
-export function renderOverview({ stats, filter, today, followUps }) {
+// Students who may need outreach (see checkon.js); hidden when the list is empty
+function renderCheckOnPanel(rows = []) {
+  if (rows.length === 0) return "";
+  const open = rows.filter((r) => !r.reachedAt).length;
+  const chip = (r) =>
+    `<span class="checkon-reason ${r.kind}">${r.kind === "safety" ? '<i class="material-icons" aria-hidden="true">warning</i>' : ""}${escapeHtml(r.label)}</span>`;
+  return `
+    <section class="overview-panel checkon-panel">
+      <h3><i class="material-icons">volunteer_activism</i> Students to check on
+        <span class="checkon-count">${open ? `${open} need${open === 1 ? "s" : ""} outreach` : "All reached out"}</span>
+      </h3>
+      <p class="checkon-intro">Based on check-ins and missed sessions. Nothing is sent until you press Reach out.</p>
+      <ul class="checkon-list">
+        ${rows
+          .map(
+            (r) => `
+          <li class="checkon-row ${r.reachedAt ? "reached" : ""}">
+            <div class="checkon-main">
+              <button type="button" class="case-link" data-student="${r.studentId}" title="Open case file">${escapeHtml(r.studentName)}</button>
+              <div class="checkon-reasons">${r.reasons.map(chip).join("")}</div>
+              <small>${r.nextSession ? `Next session ${formatDateShort(toDateKey(r.nextSession))}, ${formatTime12(timeKey(r.nextSession))}` : "No upcoming session"}</small>
+            </div>
+            ${
+              r.reachedAt
+                ? `<span class="checkon-done"><i class="material-icons" aria-hidden="true">done</i> Reached out ${formatDateShort(toDateKey(new Date(r.reachedAt)))}</span>`
+                : `<button type="button" class="act-btn complete checkon-btn" data-id="${r.triggerId}" data-student="${r.studentId}"><i class="material-icons">chat</i><span>Reach out</span></button>`
+            }
+          </li>`,
+          )
+          .join("")}
+      </ul>
+    </section>`;
+}
+
+const pad = (n) => String(n).padStart(2, "0");
+const toDateKey = (d) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const timeKey = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+export function renderOverview({ stats, filter, today, followUps, checkOn }) {
   const statCard = (key, icon, label, value, hint) => `
     <button type="button" class="overview-stat ${key} ${filter === key ? "active" : ""} ${value > 0 ? "has-items" : ""}" data-filter="${key}" aria-pressed="${filter === key}">
       <span class="overview-icon"><i class="material-icons">${icon}</i></span>
@@ -85,6 +124,8 @@ export function renderOverview({ stats, filter, today, followUps }) {
       ${statCard("today", "today", "Today's Sessions", stats.today, "Approved for today")}
       ${statCard("to-close", "task_alt", "Needs Closing", stats.toClose, "Session time has passed")}
     </div>
+
+    ${renderCheckOnPanel(checkOn)}
 
     <div class="overview-panels">
       <section class="overview-panel">

@@ -58,6 +58,7 @@ create table if not exists public.appointments (
   counselor_notes       text not null default '',
   follow_up             boolean not null default false,
   follow_up_reminded_at timestamptz,
+  checked_on_at         timestamptz,
   feedback              jsonb,
   check_in              jsonb,
   reminders             jsonb not null default '{}'::jsonb,
@@ -67,6 +68,9 @@ create table if not exists public.appointments (
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now()
 );
+-- Columns added after the first release (safe to re-run)
+alter table public.appointments add column if not exists checked_on_at timestamptz;
+
 -- No double-booking: one active booking per counselor per slot
 create unique index if not exists appointments_slot_taken
   on public.appointments (counselor_id, date, time)
@@ -309,6 +313,7 @@ begin
   new.counselor_notes := '';
   new.follow_up := false;
   new.follow_up_reminded_at := null;
+  new.checked_on_at := null;
   new.feedback := null;
   new.decided_at := null;
   new.reminders := '{}'::jsonb;
@@ -334,7 +339,8 @@ begin
      or new.decided_at is distinct from old.decided_at
      or new.check_in is distinct from old.check_in
      or new.created_at <> old.created_at
-     or new.follow_up_reminded_at is distinct from old.follow_up_reminded_at then
+     or new.follow_up_reminded_at is distinct from old.follow_up_reminded_at
+     or new.checked_on_at is distinct from old.checked_on_at then
     raise exception 'Students cannot change this field' using errcode = '42501';
   end if;
 

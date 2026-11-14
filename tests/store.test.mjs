@@ -450,4 +450,93 @@ test("my wellbeing: only my check-ins, oldest first", () => {
   assert.equal(getMyCheckIns(5).length, 0);
 });
 
+const { getStudentsToCheckOn } = await load("checkon.js");
+
+test("check-on list: safety flags, two Highs, missed and not rebooked", () => {
+  const now = new Date();
+  const day = (offset) =>
+    store.toDateStr(new Date(now.getTime() + offset * 86400000));
+  const a = (id, studentId, offset, extra) => ({
+    id,
+    studentId,
+    studentName: `S${studentId}`,
+    counselorId: 2,
+    type: "T",
+    date: day(offset),
+    time: "09:00",
+    status: "completed",
+    ...extra,
+  });
+  const high = { level: "High", score: 11, answers: [3, 3, 3, 2, 0] };
+  store.saveAppointments([
+    // S1: safety flag 5 days ago -> listed, priority 1
+    a(1, 1, -5, { checkIn: { ...high, safetyFlag: true } }),
+    // S2: two Highs in a row -> listed
+    a(2, 2, -20, { checkIn: high }),
+    a(3, 2, -6, { checkIn: high }),
+    // S3: no-show 4 days ago, nothing booked after -> listed
+    a(4, 3, -4, { status: "no-show" }),
+    // S4: no-show but rebooked -> not listed
+    a(5, 4, -4, { status: "no-show" }),
+    a(6, 4, 3, { status: "pending" }),
+    // S5: one High then Low -> not listed
+    a(7, 5, -10, { checkIn: high }),
+    a(8, 5, -2, {
+      checkIn: { level: "Low", score: 3, answers: [1, 1, 1, 0, 0] },
+    }),
+    // S6: safety flag but for another counselor -> not mine
+    a(9, 6, -3, { counselorId: 4, checkIn: { ...high, safetyFlag: true } }),
+    // S7: old safety flag (60 days) -> not listed
+    a(10, 7, -60, { checkIn: { ...high, safetyFlag: true } }),
+  ]);
+  const rows = getStudentsToCheckOn(2, now);
+  assert.deepEqual(
+    rows.map((r) => r.studentId),
+    [1, 2, 3],
+  );
+  assert.equal(rows[0].reasons[0].kind, "safety");
+  assert.equal(rows[1].reasons[0].kind, "highTwice");
+  assert.equal(rows[2].reasons[0].kind, "missed");
+  assert.equal(rows[0].triggerId, 1);
+});
+
+test("check-on list: reaching out marks the row and moves it last for a week", () => {
+  const now = new Date();
+  const appt = (id, studentId, extra) => ({
+    id,
+    studentId,
+    studentName: `S${studentId}`,
+    counselorId: 2,
+    type: "T",
+    date: store.toDateStr(new Date(now.getTime() - 3 * 86400000)),
+    time: "09:00",
+    status: "completed",
+    checkIn: {
+      level: "High",
+      score: 12,
+      answers: [3, 3, 3, 2, 1],
+      safetyFlag: true,
+    },
+    ...extra,
+  });
+  store.saveAppointments([
+    appt(1, 1, {
+      checkedOnAt: new Date(now.getTime() - 86400000).toISOString(),
+    }),
+    appt(2, 2, {}),
+    appt(3, 3, {
+      checkedOnAt: new Date(now.getTime() - 10 * 86400000).toISOString(),
+    }), // too long ago
+  ]);
+  const rows = getStudentsToCheckOn(2, now);
+  assert.deepEqual(
+    rows.map((r) => [r.studentId, Boolean(r.reachedAt)]),
+    [
+      [2, false],
+      [3, false],
+      [1, true],
+    ],
+  );
+});
+
 console.log(`\n${passed} tests passed`);

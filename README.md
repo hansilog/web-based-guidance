@@ -14,11 +14,13 @@ our title is web based guidance management and scheduling system.
 - Waitlist for taken times: notified when a spot opens, with "Book now" on the Dashboard
 - Optional 5-question wellbeing check-in at booking; worrying answers mark the request urgent and show crisis hotlines
 - My Wellbeing: the student's own check-in scores over time, latest answers, and where to get help
+- Download my data (Settings): a JSON copy of everything stored about them (Data Privacy Act right to access); counselors' private case notes excluded
 - Reminders a day before and an hour before approved sessions (notification, plus email the day before)
 
 **Guidance counselors**
 
 - Overview: pending, urgent, today's and needs-closing counts that filter the queue when clicked
+- Students to check on: students with a recent safety flag, two High check-ins in a row, or a missed session not rebooked; Reach out sends a warm message and records it for a week
 - Insights: sessions per week, most common concerns, how sessions ended, wellbeing check-in levels, no-show rate, rating and response time for the last 30 / 90 / 365 days (every chart has a table view)
 - Today's schedule and a follow-up tracker with one-click reminders to students
 - Log walk-in sessions for students who came in without booking, saved to their case file
@@ -62,6 +64,7 @@ src/
 ├── checkin.js       # Wellbeing check-in questions, scoring, and counselor views
 ├── insights.js      # Counselor Insights tab: stat tiles and charts (plain HTML/CSS)
 ├── wellbeing.js     # Student My Wellbeing page (reuses the Insights charts)
+├── checkon.js       # Rules for the counselor's "Students to check on" list
 ├── ui.js            # Shared dialog + notification bell
 ├── student.js       # Student portal (dashboard, booking, reschedule, rating, history, settings, AI chat)
 ├── guidance.js      # Counselor portal logic
