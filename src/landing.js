@@ -174,7 +174,6 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
                     <img class="landing-logo" src="${schoolLogo}" alt="Granby Colleges of Science and Technology seal" width="36" height="36">
                     <span>Granby Colleges of Science and Technology</span>
                 </div>
-                <button class="nav-login" id="navLoginBtn">Sign In</button>
             </nav>
 
             <section class="hero">
@@ -183,11 +182,16 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
                     <h1>Your Academic Success, <br><span class="highlight">Simplified.</span></h1>
                     <p>Connect with guidance counselors, manage appointments, and track your records through the secure Granby College portal.</p>
                     <div class="cta-group">
-                        <button class="btn-primary" id="getStartedBtn">
+                        <button class="btn-primary cta-btn" id="getStartedBtn">
                             Get Started <i class="material-icons">arrow_forward</i>
                         </button>
-                        <button class="btn-secondary" id="viewServicesBtn">View Services</button>
+                        <button class="btn-secondary cta-btn" id="navLoginBtn">
+                            Sign In <i class="material-icons">login</i>
+                        </button>
                     </div>
+                    <button type="button" class="services-link" id="viewServicesBtn">
+                        View services <i class="material-icons">expand_more</i>
+                    </button>
                 </div>
             </section>
 
