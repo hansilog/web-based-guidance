@@ -106,6 +106,19 @@ the login session, the Google Calendar token, the Gemini key and the concern-for
 
 Check-in answers stay out of the AI case summary, the CSV export, emails and the printed slip.
 
+## Offline demo copy (no internet)
+
+A backup that runs from a folder with no internet: browser storage instead of Supabase,
+the font and icons bundled in, and a copy of the live demo data built in.
+
+1. `npm run copy-live-data` (needs internet) copies the live demo data to `offline/seed.json`
+2. `npm run build:offline` builds `offline-demo/`
+3. Open `offline-demo/index.html` in Chrome or Edge. Every password is the same as the username.
+
+Changes made in the offline copy stay in that browser only. Open `index.html?reset` to start
+over from the copied data. Email, Granby AI and Google Calendar need the internet.
+Both folders are git-ignored because the copied data includes real email addresses.
+
 ## Demo accounts (localStorage mode)
 
 With Supabase, register accounts in the app and make the first admin as described in [supabase/README.md](supabase/README.md).

@@ -43,6 +43,26 @@ const IDLE_LIMIT_MS = 15 * 60 * 1000;
 
 emailjs.init("6_rFpZEVOh3AVEsIM");
 
+// Offline demo build: start from a copy of the live demo data (built in by
+// webpack.offline.js). Open the page with ?reset to start over.
+const OFFLINE_SEED =
+  typeof __OFFLINE_SEED__ !== "undefined" ? __OFFLINE_SEED__ : null;
+
+function seedOfflineCopy() {
+  if (!OFFLINE_SEED) return;
+  if (new URLSearchParams(window.location.search).has("reset")) {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("gh_"))
+      .forEach((k) => localStorage.removeItem(k));
+    sessionStorage.removeItem("gh_session");
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  if (hasCollection("gh_users")) return;
+  Object.entries(OFFLINE_SEED).forEach(([key, value]) =>
+    localStorage.setItem(key, JSON.stringify(value)),
+  );
+}
+
 // --- UPDATED SEED USERS ---
 const seedUsers = async () => {
   if (!hasCollection("gh_users")) {
@@ -483,6 +503,7 @@ const initializeSystemSequence = async () => {
     return;
   }
 
+  seedOfflineCopy();
   await seedUsers();
   seedAppointments();
   await migrateData();

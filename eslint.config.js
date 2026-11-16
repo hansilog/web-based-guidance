@@ -15,8 +15,15 @@ const compat = new FlatCompat({
 export default [
   // --- ADD THIS BLOCK TO IGNORE BUILT FILES ---
   {
-    // tests/ are Node scripts (npm test), not browser code
-    ignores: ["dist/**", "node_modules/**", "webpack.*.js", "tests/**"],
+    // tests/ and scripts/ are Node scripts, not browser code
+    ignores: [
+      "dist/**",
+      "offline-demo/**",
+      "node_modules/**",
+      "webpack.*.js",
+      "tests/**",
+      "scripts/**",
+    ],
   },
   // ---------------------------------------------
 
