@@ -710,16 +710,17 @@ await test("limits: 3 upcoming bookings and 5 waitlist entries per student", asy
                   values ($1, $2, $3, 'Other', $4, '09:00')`,
       [id, s.id, coun.id, weekday(offset)],
     );
-  await book(5, 3001);
-  await book(6, 3002);
-  await book(7, 3003);
-  await rejects(book(8, 3004), /3 upcoming sessions/);
+  // 3 days apart (and after day2) so weekend roll-over never lands two on one date
+  await book(7, 3001);
+  await book(10, 3002);
+  await book(13, 3003);
+  await rejects(book(16, 3004), /3 upcoming sessions/);
   // Cancelling one frees a place
   await as(
     s.authId,
     "update public.appointments set status = 'cancelled' where id = 3003",
   );
-  await book(8, 3004);
+  await book(16, 3004);
 
   const wait = (offset, time) =>
     as(

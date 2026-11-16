@@ -495,7 +495,9 @@ export function renderDashboard(session = {}) {
     const rankA = statusRank[a.status] || 4;
     const rankB = statusRank[b.status] || 4;
     if (rankA !== rankB) return rankA - rankB;
-    return appointmentStart(a) - appointmentStart(b);
+    // Upcoming: soonest first. Past (completed, rejected...): newest first
+    const diff = appointmentStart(a) - appointmentStart(b);
+    return rankA <= 2 ? diff : -diff;
   });
 
   const pendingCount = myApps.filter((a) => a.status === "pending").length;

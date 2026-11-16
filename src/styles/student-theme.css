@@ -167,6 +167,11 @@ body.student-portal .support-card h4 {
 body.student-portal .day-num.today,
 body.student-portal .day-num.has-event {
   background: var(--c-blue);
+  color: #fff;
+}
+
+body.student-portal .day-num.has-event::after {
+  background: #fff;
 }
 
 /* --- Booking form and settings --- */

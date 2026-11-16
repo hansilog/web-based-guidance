@@ -1184,7 +1184,7 @@ window.exportAppointmentsCsv = () => {
   );
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `granby-appointments-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `granby-appointments-${toDateStr(new Date())}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
