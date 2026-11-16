@@ -253,12 +253,12 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
                     <div class="member-card">
                         <div class="member-avatar"><i class="material-icons">person</i></div>
                         <h3>Christine Mae Bombeza</h3>
-                        <span>Developer</span>
+                        <span>Documentation</span>
                     </div>
                     <div class="member-card">
                         <div class="member-avatar"><i class="material-icons">person</i></div>
                         <h3>Hans Balasbas</h3>
-                        <span>Documentation</span>
+                        <span>Developer</span>
                     </div>
                     <div class="member-card">
                         <div class="member-avatar"><i class="material-icons">person</i></div>
