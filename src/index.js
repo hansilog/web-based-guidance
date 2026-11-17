@@ -1,4 +1,5 @@
 import emailjs from "@emailjs/browser";
+import { EMAIL_PUBLIC_KEY } from "./emailConfig.js";
 import { renderLoginPage, renderSetNewPassword } from "./auth.js";
 import { syncPortalTab, showTabFromUrl } from "./history.js";
 import { renderStudentView } from "./student.js";
@@ -41,7 +42,7 @@ import "./styles/admin-theme.css";
 
 const IDLE_LIMIT_MS = 15 * 60 * 1000;
 
-emailjs.init("6_rFpZEVOh3AVEsIM");
+emailjs.init(EMAIL_PUBLIC_KEY);
 
 // Offline demo build: start from a copy of the live demo data (built in by
 // webpack.offline.js). Open the page with ?reset to start over.

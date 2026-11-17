@@ -1,4 +1,10 @@
 import emailjs from "@emailjs/browser";
+import {
+  EMAIL_PUBLIC_KEY,
+  EMAIL_SERVICE,
+  EMAIL_TEMPLATE,
+  EMAIL_CODE_TEMPLATE,
+} from "./emailConfig.js";
 import schoolLogo from "./assets/school-logo-128.png";
 import "./styles/guidance.css";
 import {
@@ -56,7 +62,7 @@ import {
   NOTE_TEMPLATES,
 } from "./guidanceView.js";
 
-emailjs.init("6_rFpZEVOh3AVEsIM");
+emailjs.init(EMAIL_PUBLIC_KEY);
 
 // The logged-in counselor, set when the view is rendered
 let currentSession = null;
@@ -180,7 +186,7 @@ export function renderAppointmentsTable() {
 function emailStudent(app, status, notes) {
   if (!canReceiveEmail(app.studentEmail)) return Promise.resolve();
   return emailjs
-    .send("service_mtv9cbi", "template_mublumh", {
+    .send(EMAIL_SERVICE, EMAIL_TEMPLATE, {
       subject_line: `Update: Your Appointment is ${status.toUpperCase()}`,
       to_email: app.studentEmail,
       recipient_name: app.studentName,
@@ -927,7 +933,7 @@ function attachSettingsListener() {
       requestBtn.disabled = true;
 
       try {
-        await emailjs.send("service_mtv9cbi", "template_gbmoria", {
+        await emailjs.send(EMAIL_SERVICE, EMAIL_CODE_TEMPLATE, {
           to_email: recipientEmail,
           otp: generatedOTP,
           otp_code: generatedOTP,

@@ -3,6 +3,7 @@
 // With no backend, reminders go out while the app is open in a browser.
 // Once the database is in place, this check belongs in a scheduled server job.
 import emailjs from "@emailjs/browser";
+import { EMAIL_SERVICE, EMAIL_TEMPLATE } from "./emailConfig.js";
 import {
   getAppointments,
   saveAppointments,
@@ -32,7 +33,7 @@ function whenText(app) {
 function emailReminder(app, message) {
   if (!canReceiveEmail(app.studentEmail)) return;
   emailjs
-    .send("service_mtv9cbi", "template_mublumh", {
+    .send(EMAIL_SERVICE, EMAIL_TEMPLATE, {
       subject_line: "Reminder: Your Guidance Session",
       to_email: app.studentEmail,
       recipient_name: app.studentName,

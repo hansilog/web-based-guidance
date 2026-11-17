@@ -8,6 +8,11 @@ import {
   getDate,
   isSameDay,
 } from "date-fns";
+import {
+  EMAIL_PUBLIC_KEY,
+  EMAIL_SERVICE,
+  EMAIL_TEMPLATE,
+} from "./emailConfig.js";
 import schoolLogo from "./assets/school-logo-128.png";
 import {
   listenForRealTimeUpdates,
@@ -59,10 +64,7 @@ import { checkInFormHtml, readCheckIn } from "./checkin.js";
 import { renderWellbeing } from "./wellbeing.js";
 import { MAX_UPCOMING_BOOKINGS, MAX_WAITLIST } from "./reminders.js";
 
-emailjs.init("6_rFpZEVOh3AVEsIM");
-
-const EMAIL_SERVICE = "service_mtv9cbi";
-const EMAIL_TEMPLATE = "template_mublumh";
+emailjs.init(EMAIL_PUBLIC_KEY);
 
 const STATUS_LABELS = {
   pending: "Pending",

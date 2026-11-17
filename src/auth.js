@@ -1,4 +1,9 @@
 import emailjs from "@emailjs/browser";
+import {
+  EMAIL_PUBLIC_KEY,
+  EMAIL_SERVICE,
+  EMAIL_CODE_TEMPLATE,
+} from "./emailConfig.js";
 import schoolLogo from "./assets/school-logo.png";
 import { hashPassword } from "./syncUtil.js";
 import { findUserByEmail, updateUser } from "./store.js";
@@ -6,7 +11,7 @@ import { isRemote, sendResetLink, setNewPassword } from "./remote.js";
 import "./styles/auth.css";
 
 // Initialize EmailJS
-emailjs.init("6_rFpZEVOh3AVEsIM");
+emailjs.init(EMAIL_PUBLIC_KEY);
 
 export function renderLoginPage(
   root,
@@ -229,7 +234,7 @@ export function renderLoginPage(
           otpExpiresAt = Date.now() + OTP_TTL_MS;
           otpTriesLeft = OTP_MAX_TRIES;
           try {
-            await emailjs.send("service_mtv9cbi", "template_gbmoria", {
+            await emailjs.send(EMAIL_SERVICE, EMAIL_CODE_TEMPLATE, {
               to_email: emailVal,
               otp: generatedOTP,
               otp_code: generatedOTP,
