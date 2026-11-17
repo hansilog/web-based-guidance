@@ -300,9 +300,11 @@ async function handleRegister(
     .trim()
     .toLowerCase();
 
-  if (!/^[a-zA-Z0-9._]{3,20}$/.test(username)) {
+  if (!username) return showError("Please enter a username.");
+  // "@" means "sign in with email" on the sign-in screen, so a username can't have one
+  if (username.includes("@")) {
     return showError(
-      "Username must be 3–20 characters: letters, numbers, dots or underscores.",
+      "A username can't contain @. Use your email in the Email field.",
     );
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail)) {
