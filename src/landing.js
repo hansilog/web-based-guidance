@@ -237,7 +237,7 @@ export function renderLandingPage(root, onGetStarted, onLogin) {
                 <div class="team-grid">
                     <div class="member-card">
                         <div class="member-avatar"><i class="material-icons">person</i></div>
-                        <h3>Jhefrei Gaspar</h3>
+                        <h3>Jhedrei Gaspar</h3>
                         <span>Project Lead</span>
                     </div>
                     <div class="member-card">
