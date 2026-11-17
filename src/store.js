@@ -183,7 +183,6 @@ export const COUNSELING_TYPES = [
   "Family Concern",
   "Bullying / Peer Conflict",
   "Behavioral Concern",
-  "Grief / Loss",
   "Scholarship / Financial",
   "Other",
 ];

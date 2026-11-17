@@ -363,7 +363,7 @@ test("insights: tiles count the counselor's own sessions in range", () => {
       feedback: { rating: 3 },
     },
     { ...base, id: 4, ...ago(5), status: "no-show" },
-    { ...base, id: 5, ...ago(6), status: "cancelled", type: "Grief / Loss" },
+    { ...base, id: 5, ...ago(6), status: "cancelled", type: "Family Concern" },
     {
       ...base,
       id: 6,

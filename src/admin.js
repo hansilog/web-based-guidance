@@ -1268,7 +1268,7 @@ function getAnalytics() {
     academic,
     personal,
     career,
-    // Family, bullying, grief, scholarship, etc.
+    // Family, bullying, scholarship, etc.
     otherTypes: apps.length - academic - personal - career,
     yearBreakdown,
     courseBreakdown,
