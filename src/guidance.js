@@ -17,7 +17,8 @@ import {
   saveUsers,
   getUserById,
   getSlotStates,
-  isCounselorFree,
+  isTimeOpen,
+  overlappingSession,
   addNotification,
   appointmentStart,
   formatTime12,
@@ -211,7 +212,9 @@ async function addToGoogleCalendar(app, notes) {
 // Approve or reject a pending request
 function openDecisionModal(app, status) {
   const isApprove = status === "approved";
-  const slots = getSlotStates(app.date, currentSession.id, app.id);
+  const slots = getSlotStates(app.date, currentSession.id, app.id, {
+    staff: true,
+  });
 
   openModal({
     title: isApprove ? "Approve Request" : "Reject Request",
@@ -234,7 +237,7 @@ function openDecisionModal(app, status) {
       };
       if (isApprove) {
         const time = card.querySelector("#decisionTime").value;
-        if (!isCounselorFree(currentSession.id, app.date, time, app.id)) {
+        if (!isTimeOpen(currentSession.id, app.date, time, app.id)) {
           showError("You already have another session at that time.");
           return false;
         }
@@ -384,6 +387,27 @@ function openWalkInModal() {
       }
       if (appointmentStart({ date, time }) > new Date()) {
         showError("A walk-in can't be in the future.");
+        return false;
+      }
+      // Sessions are one hour: no overlap with the counselor's or student's others
+      const all = getAppointments();
+      const clash =
+        overlappingSession(
+          all.filter((a) => a.counselorId === currentSession.id),
+          date,
+          time,
+        ) ||
+        overlappingSession(
+          all.filter((a) => a.studentId === student.id),
+          date,
+          time,
+        );
+      if (clash) {
+        showError(
+          clash.date === date && clash.time === time
+            ? `There's already a session on this date and time (${clash.studentName}). Pick a different time.`
+            : `This overlaps ${clash.studentName}'s session at ${formatTime12(clash.time)}. Sessions are 1 hour, so start at least an hour apart.`,
+        );
         return false;
       }
 

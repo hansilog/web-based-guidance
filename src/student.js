@@ -22,6 +22,8 @@ import {
   updateAppointment,
   getCounselors,
   checkDate,
+  dayBookingCount,
+  getSettings,
   getSlotStates,
   isCounselorFree,
   autoAssignCounselor,
@@ -261,7 +263,7 @@ function slotPickerHtml(
   }
   if (!date) return `<p class="slot-hint">Choose a date to see open times.</p>`;
 
-  const reason = checkDate(date, counselorKey);
+  const reason = checkDate(date, counselorKey, ignoreAppId);
   if (reason) return `<p class="slot-hint warn">${escapeHtml(reason)}</p>`;
 
   const slots = getSlotStates(date, counselorKey, ignoreAppId);
@@ -269,7 +271,13 @@ function slotPickerHtml(
   if (!slots.some((s) => s.free)) {
     return `<p class="slot-hint warn">No open times on this day. Please try another date.</p>${waitlist}`;
   }
+  const { maxPerDay } = getSettings();
+  const left =
+    typeof counselorKey === "number"
+      ? maxPerDay - dayBookingCount(counselorKey, date, ignoreAppId)
+      : null;
   return `
+    <p class="slot-hint">Each session is 1 hour.${left !== null ? ` ${left} of ${maxPerDay} spots left with this counselor on this day.` : ""}</p>
     <div class="slot-grid">
       ${slots
         .map(
@@ -1427,7 +1435,7 @@ function openRescheduleDialog(session, app) {
       const time = card.querySelector("#rsTime").value;
       const reason = card.querySelector("#rsReason").value.trim();
 
-      const dateProblem = checkDate(date, counselorKey);
+      const dateProblem = checkDate(date, counselorKey, app.id);
       if (dateProblem) {
         showError(dateProblem);
         return false;

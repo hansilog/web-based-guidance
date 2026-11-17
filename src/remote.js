@@ -156,6 +156,7 @@ export const COLLECTIONS = {
       ["openHour", "open_hour"],
       ["closeHour", "close_hour"],
       ["lunchHour", "lunch_hour"],
+      ["maxPerDay", "max_per_day"],
       ["holidays", "holidays"],
     ],
   },

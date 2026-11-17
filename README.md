@@ -42,7 +42,7 @@ our title is web based guidance management and scheduling system.
 - Manage students: search, deactivate/activate, reset password
 - Reports: request types, statuses, year level, course, satisfaction ratings; CSV export and printable report
 - Global announcements, full activity log
-- Office hours (opening, closing, lunch) and office-wide holidays/closures
+- Office hours (opening, closing, lunch), a daily limit of booked sessions per counselor (default 5), and office-wide holidays/closures
 - Counselor performance: completed sessions, last 7 days, active load, no-show rate, rating, response time
 
 **Public (no account)**

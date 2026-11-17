@@ -268,10 +268,12 @@ export function to24h(time) {
 
 // Hours are whole 24-hour numbers; lunchHour null means no lunch break.
 // holidays: [{ date: "YYYY-MM-DD", name }] closes the office for everyone.
+// maxPerDay: most booked sessions (pending + approved) per counselor per day.
 export const DEFAULT_SETTINGS = {
   openHour: 8,
   closeHour: 17,
   lunchHour: 12,
+  maxPerDay: 5,
   holidays: [],
 };
 
@@ -314,8 +316,9 @@ export function isDayOff(counselorId, date) {
   );
 }
 
-// Returns a reason the date can't be booked, or "" when it's fine
-export function checkDate(date, counselorId = null) {
+// Returns a reason the date can't be booked, or "" when it's fine.
+// ignoreAppId: the appointment being rescheduled (doesn't count toward the limit)
+export function checkDate(date, counselorId = null, ignoreAppId = null) {
   if (!date) return "Pick a date.";
   const day = parseDate(date);
   const today = parseDate(toDateStr(new Date()));
@@ -334,10 +337,17 @@ export function checkDate(date, counselorId = null) {
     return "This counselor is not available on this day.";
   }
   if (
-    counselorId === "auto" &&
-    getCounselors().every((c) => isDayOff(c.id, date))
+    typeof counselorId === "number" &&
+    isFullOnDay(counselorId, date, ignoreAppId)
   ) {
-    return "No counselors are available on this day.";
+    return `This counselor is fully booked on this day (${getSettings().maxPerDay} sessions a day). Please pick another date.`;
+  }
+  if (counselorId === "auto") {
+    const open = getCounselors().filter((c) => !isDayOff(c.id, date));
+    if (!open.length) return "No counselors are available on this day.";
+    if (open.every((c) => isFullOnDay(c.id, date, ignoreAppId))) {
+      return "All counselors are fully booked on this day. Please pick another date.";
+    }
   }
   return "";
 }
@@ -358,7 +368,24 @@ export function getActiveBookings() {
   ];
 }
 
-export function isCounselorFree(counselorId, date, time, ignoreAppId = null) {
+// The counselor's booked sessions that day (pending + approved, no walk-ins)
+export function dayBookingCount(counselorId, date, ignoreAppId = null) {
+  return getActiveBookings().filter(
+    (a) =>
+      a.id !== ignoreAppId && a.counselorId === counselorId && a.date === date,
+  ).length;
+}
+
+// Daily limit reached (set by the admin under Office Hours)
+export function isFullOnDay(counselorId, date, ignoreAppId = null) {
+  return (
+    dayBookingCount(counselorId, date, ignoreAppId) >= getSettings().maxPerDay
+  );
+}
+
+// The time itself is open: not a day off and no other session at that time.
+// Counselors use this directly; they may go over the daily limit themselves.
+export function isTimeOpen(counselorId, date, time, ignoreAppId = null) {
   if (isDayOff(counselorId, date)) return false;
   return !getActiveBookings().some(
     (a) =>
@@ -369,20 +396,48 @@ export function isCounselorFree(counselorId, date, time, ignoreAppId = null) {
   );
 }
 
+// A student can book this counselor at this time
+export function isCounselorFree(counselorId, date, time, ignoreAppId = null) {
+  return (
+    isTimeOpen(counselorId, date, time, ignoreAppId) &&
+    !isFullOnDay(counselorId, date, ignoreAppId)
+  );
+}
+
 // Every slot for a date with whether it can be booked.
 // counselorId may be a counselor's id, or "auto" for "any available counselor".
-export function getSlotStates(date, counselorId, ignoreAppId = null) {
+// staff: true skips the daily limit (a counselor approving a request).
+export function getSlotStates(
+  date,
+  counselorId,
+  ignoreAppId = null,
+  { staff = false } = {},
+) {
   const now = new Date();
   const counselors = getCounselors();
+  const open = staff ? isTimeOpen : isCounselorFree;
   return getSlots().map((time) => {
     const start = appointmentStart({ date, time });
     if (start <= now) return { time, free: false, reason: "Past" };
     const free =
       counselorId === "auto"
-        ? counselors.some((c) => isCounselorFree(c.id, date, time, ignoreAppId))
-        : isCounselorFree(counselorId, date, time, ignoreAppId);
+        ? counselors.some((c) => open(c.id, date, time, ignoreAppId))
+        : open(counselorId, date, time, ignoreAppId);
     return { time, free, reason: free ? "" : "Booked" };
   });
+}
+
+// Sessions last one hour, so two can't start less than an hour apart
+export function overlappingSession(apps, date, time) {
+  const start = appointmentStart({ date, time }).getTime();
+  return (
+    apps.find(
+      (a) =>
+        ["approved", "completed"].includes(a.status) &&
+        Math.abs(appointmentStart(a).getTime() - start) <
+          SESSION_MINUTES * 60000,
+    ) || null
+  );
 }
 
 // Free counselor with the fewest active appointments (ties: lowest id)

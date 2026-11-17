@@ -698,6 +698,41 @@ await test("meeting links: https only, set by staff, students can't change them"
   assert.equal(rows[0].meeting_link, "https://meet.google.com/abc-defg-hij");
 });
 
+await test("daily limit: a counselor takes at most max_per_day bookings a day", async () => {
+  await sql("update public.settings set max_per_day = 2 where id = 1");
+  const date = weekday(19);
+  const people = [];
+  for (const n of [1, 2, 3])
+    people.push(
+      await signUp(`daily${n}@x.com`, {
+        username: `daily${n}`,
+        name: `Day ${n}`,
+      }),
+    );
+  const book = (p, id, time) =>
+    as(
+      p.authId,
+      `insert into public.appointments (id, student_id, counselor_id, type, date, time)
+                  values ($1, $2, $3, 'Other', $4, $5)`,
+      [id, p.id, coun.id, date, time],
+    );
+  await book(people[0], 5001, "09:00");
+  await book(people[1], 5002, "10:00");
+  await rejects(book(people[2], 5003, "11:00"), /fully booked on this day/);
+  // Moving a session within the same full day is still allowed
+  await as(
+    people[1].authId,
+    "update public.appointments set time = '11:00' where id = 5002",
+  );
+  // A cancellation frees a place
+  await as(
+    people[0].authId,
+    "update public.appointments set status = 'cancelled' where id = 5001",
+  );
+  await book(people[2], 5003, "09:00");
+  await sql("update public.settings set max_per_day = 5 where id = 1");
+});
+
 await test("limits: 3 upcoming bookings and 5 waitlist entries per student", async () => {
   const s = await signUp("limits@x.com", {
     username: "limits",

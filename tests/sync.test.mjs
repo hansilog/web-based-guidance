@@ -224,6 +224,7 @@ await test("load: each role gets what RLS allows, in the app's shape", async () 
     openHour: 8,
     closeHour: 17,
     lunchHour: 12,
+    maxPerDay: 5,
     holidays: [],
   });
   assert.equal(
@@ -452,15 +453,21 @@ await test("settings: single row; admin saves, student is refused", async () => 
     openHour: 9,
     closeHour: 16,
     lunchHour: null,
+    maxPerDay: 4,
     holidays: [{ date: weekday(20), name: "Fiesta" }],
   });
   await A.sync.flush();
   const { rows } = await db.query(
-    "select open_hour, close_hour, lunch_hour, holidays from public.settings",
+    "select open_hour, close_hour, lunch_hour, max_per_day, holidays from public.settings",
   );
   assert.deepEqual(
-    [rows[0].open_hour, rows[0].close_hour, rows[0].lunch_hour],
-    [9, 16, null],
+    [
+      rows[0].open_hour,
+      rows[0].close_hour,
+      rows[0].lunch_hour,
+      rows[0].max_per_day,
+    ],
+    [9, 16, null, 4],
   );
   assert.equal(rows[0].holidays[0].name, "Fiesta");
   await S1.sync.refresh("gh_settings");
@@ -469,6 +476,7 @@ await test("settings: single row; admin saves, student is refused", async () => 
     openHour: 8,
     closeHour: 17,
     lunchHour: 12,
+    maxPerDay: 5,
     holidays: [],
   });
   await A.sync.flush();

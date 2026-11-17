@@ -98,6 +98,32 @@ const base = {
   createdAt: new Date().toISOString(),
 };
 
+test("daily limit per counselor, and 1-hour sessions don't overlap", () => {
+  store.saveSettings({ ...store.getSettings(), maxPerDay: 2 });
+  store.saveAppointments([
+    { ...base, id: 601, time: "09:00" },
+    { ...base, id: 602, time: "10:00", status: "pending" },
+  ]);
+  assert.equal(store.isFullOnDay(2, day), true);
+  assert.match(store.checkDate(day, 2), /fully booked/);
+  // Rescheduling one of them within the day doesn't count itself
+  assert.equal(store.checkDate(day, 2, 602), "");
+  assert.equal(store.isCounselorFree(2, day, "11:00"), false);
+  // The counselor can still approve at an open time
+  assert.equal(store.isTimeOpen(2, day, "11:00"), true);
+  assert.ok(
+    store.getSlotStates(day, 2, null, { staff: true }).some((s) => s.free),
+  );
+
+  const apps = store.getAppointments();
+  assert.equal(store.overlappingSession(apps, day, "09:00").id, 601);
+  assert.equal(store.overlappingSession(apps, day, "09:30").id, 601);
+  // 10:00 is pending, so only approved/completed sessions block a walk-in
+  assert.equal(store.overlappingSession(apps, day, "10:30"), null);
+  store.saveSettings({ ...store.getSettings(), maxPerDay: 5 });
+  store.saveAppointments([]);
+});
+
 test("waitlist: cancelling notifies waiting students (specific + auto)", () => {
   store.saveAppointments([{ ...base, id: 500 }]);
   assert.equal(store.isCounselorFree(2, day, "10:00"), false);

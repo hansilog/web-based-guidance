@@ -155,6 +155,9 @@ create table if not exists public.settings (
   check (open_hour < close_hour)
 );
 insert into public.settings (id, lunch_hour) values (1, 12) on conflict (id) do nothing;
+-- Most booked sessions (pending + approved) per counselor per day
+alter table public.settings add column if not exists max_per_day int not null default 5
+  check (max_per_day between 1 and 24);
 
 create table if not exists public.broadcasts (
   id         bigint primary key default public.new_id(),
@@ -211,7 +214,10 @@ language sql stable set search_path = public as $$
 $$;
 
 -- Why a student can't book this slot ('' when it's fine). Mirrors checkDate() in store.js.
-create or replace function public.slot_problem(p_counselor bigint, p_date date, p_time text)
+-- p_ignore: the appointment being moved (doesn't count toward the daily limit)
+drop function if exists public.slot_problem(bigint, date, text);
+create or replace function public.slot_problem(p_counselor bigint, p_date date, p_time text,
+                                               p_ignore bigint default null)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare
   tz text := (select timezone from public.settings where id = 1);
@@ -232,6 +238,13 @@ begin
     end if;
     if exists (select 1 from public.counselor_blocks where counselor_id = p_counselor and date = p_date) then
       return 'This counselor is not available on this day.';
+    end if;
+    if (select count(*) from public.appointments a
+        where a.counselor_id = p_counselor and a.date = p_date
+          and a.status in ('pending', 'approved') and not a.walk_in
+          and a.id is distinct from p_ignore)
+       >= (select max_per_day from public.settings where id = 1) then
+      return 'This counselor is fully booked on this day.';
     end if;
   end if;
   return '';
@@ -379,7 +392,7 @@ begin
     if new.status <> 'pending' then
       raise exception 'A rescheduled session goes back to pending' using errcode = '42501';
     end if;
-    problem := public.slot_problem(new.counselor_id, new.date, new.time);
+    problem := public.slot_problem(new.counselor_id, new.date, new.time, new.id);
     if problem <> '' then raise exception '%', problem using errcode = 'P0001'; end if;
     new.counselor_name := coalesce((select name from public.profiles where id = new.counselor_id), 'Unassigned');
   elsif new.counselor_name <> old.counselor_name then

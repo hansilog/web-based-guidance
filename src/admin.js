@@ -605,6 +605,16 @@ function renderOfficeSettings(container) {
             ${hourOptions(10, 14, settings.lunchHour)}
           </select>
         </label>
+        <label>Max sessions per counselor per day
+          <select id="maxPerDay" class="admin-input">
+            ${Array.from({ length: 12 }, (_, i) => i + 1)
+              .map(
+                (n) =>
+                  `<option value="${n}" ${n === settings.maxPerDay ? "selected" : ""}>${n}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
       </div>
       <p class="modal-hint" id="slotPreview"></p>
       <button type="button" class="primary-btn" id="saveHoursBtn">Save Office Hours</button>
@@ -647,17 +657,19 @@ function renderOfficeSettings(container) {
       openHour: Number(container.querySelector("#openHour").value),
       closeHour: Number(container.querySelector("#closeHour").value),
       lunchHour: lunch === "" ? null : Number(lunch),
+      maxPerDay: Number(container.querySelector("#maxPerDay").value),
     };
   };
   const preview = container.querySelector("#slotPreview");
   const updatePreview = () => {
-    const slots = getSlots(read());
+    const next = read();
+    const slots = getSlots(next);
     preview.textContent = slots.length
-      ? `${slots.length} booking times a day: ${slots.map(formatTime12).join(", ")}`
+      ? `${slots.length} one-hour booking times a day: ${slots.map(formatTime12).join(", ")}. Each counselor takes at most ${next.maxPerDay} booked sessions a day.`
       : "No booking times. Check the hours.";
   };
   container
-    .querySelectorAll("#openHour, #closeHour, #lunchHour")
+    .querySelectorAll("#openHour, #closeHour, #lunchHour, #maxPerDay")
     .forEach((s) => {
       s.onchange = updatePreview;
     });
