@@ -714,4 +714,12 @@ test("case summary: private notes only when asked, names escaped", () => {
   assert.ok(withNotes.includes("SECRET NOTE"));
 });
 
+test("placeholder emails are skipped, real ones kept", () => {
+  assert.equal(store.canReceiveEmail("jerry.salvacion@granby.test"), false);
+  assert.equal(store.canReceiveEmail("someone@example.com"), false);
+  assert.equal(store.canReceiveEmail(""), false);
+  assert.equal(store.canReceiveEmail("counselor@gmail.com"), true);
+  assert.equal(store.canReceiveEmail("guidance@granby.edu.ph"), true);
+});
+
 console.log(`\n${passed} tests passed`);

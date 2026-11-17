@@ -10,6 +10,7 @@ import {
   appointmentStart,
   formatTime12,
   parseDate,
+  canReceiveEmail,
 } from "./store.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -29,7 +30,7 @@ function whenText(app) {
 }
 
 function emailReminder(app, message) {
-  if (!app.studentEmail) return;
+  if (!canReceiveEmail(app.studentEmail)) return;
   emailjs
     .send("service_mtv9cbi", "template_mublumh", {
       subject_line: "Reminder: Your Guidance Session",

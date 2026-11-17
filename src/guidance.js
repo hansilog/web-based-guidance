@@ -19,6 +19,7 @@ import {
   getSlotStates,
   isTimeOpen,
   overlappingSession,
+  canReceiveEmail,
   addNotification,
   appointmentStart,
   formatTime12,
@@ -177,6 +178,7 @@ export function renderAppointmentsTable() {
 // --- 2. LIFECYCLE INTERACTION PIPELINES ---
 
 function emailStudent(app, status, notes) {
+  if (!canReceiveEmail(app.studentEmail)) return Promise.resolve();
   return emailjs
     .send("service_mtv9cbi", "template_mublumh", {
       subject_line: `Update: Your Appointment is ${status.toUpperCase()}`,

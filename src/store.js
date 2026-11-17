@@ -451,13 +451,24 @@ export function autoAssignCounselor(date, time) {
   );
 }
 
+// Placeholder addresses (demo accounts) can never receive mail, and the email
+// service rejects them, so they are skipped. The in-app notification still goes.
+const PLACEHOLDER_DOMAIN =
+  /@(?:[^@]+\.)?(?:test|example|invalid|localhost)$|@example\.(?:com|org|net)$/i;
+export function canReceiveEmail(address) {
+  return Boolean(address) && !PLACEHOLDER_DOMAIN.test(String(address).trim());
+}
+
 // Where emails about an appointment go: its counselor, or every counselor if unassigned
 export function getCounselorTargets(app) {
   const assigned = app.counselorId ? getUserById(app.counselorId) : null;
   const list = assigned ? [assigned] : getCounselors();
   return {
     counselors: list,
-    emails: list.map((c) => c.notifyEmail || c.email).join(","),
+    emails: list
+      .map((c) => c.notifyEmail || c.email)
+      .filter(canReceiveEmail)
+      .join(","),
     name: assigned ? assigned.name : "Guidance Team",
   };
 }
